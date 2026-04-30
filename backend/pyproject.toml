@@ -1,0 +1,18 @@
+[project]
+name = "localsec-auditor-backend"
+version = "0.1.0"
+description = "FastAPI backend for LocalSec Auditor"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "sqlalchemy>=2.0,<3.0",
+    "uvicorn[standard]>=0.27,<1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0,<9.0",
+]
+
+[tool.uvicorn]
+factory = false

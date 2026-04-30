@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# LocalSec runtime data
+data/scans/
+data/raw/
+data/reports/
+data/*.db
+*.sqlite
+*.sqlite3
+
+# Scanner outputs
+*.sarif
+semgrep-result.json
+gitleaks-result.json
+trivy-result.json
+grype-result.json
+syft-result.json
+sbom.json
+
+# Secrets / keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
