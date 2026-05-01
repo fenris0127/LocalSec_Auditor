@@ -59,6 +59,27 @@ Expected response:
 {"status":"ok"}
 ```
 
+## Run Everything
+
+After installing backend and frontend dependencies, start both dev servers from the
+repository root:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+If your terminal is already inside `frontend`, this also works:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+Open the frontend:
+
+```text
+http://127.0.0.1:5173
+```
+
 ## Planned Frontend Flow
 
 Frontend, once the React app is implemented:
