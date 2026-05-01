@@ -19,6 +19,8 @@ TOOL_VERSION_COMMANDS = {
     "semgrep": ["semgrep", "--version"],
     "gitleaks": ["gitleaks", "version"],
     "trivy": ["trivy", "--version"],
+    "syft": ["syft", "version"],
+    "grype": ["grype", "version"],
 }
 
 
