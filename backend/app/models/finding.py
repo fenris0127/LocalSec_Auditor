@@ -1,7 +1,9 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.findings.fingerprint import generate_finding_fingerprint
 
 
 class Finding(Base):
@@ -13,6 +15,8 @@ class Finding(Base):
     scanner: Mapped[str] = mapped_column(String, nullable=False)
     severity: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    rule_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String, nullable=True)
     line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     component: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -21,3 +25,9 @@ class Finding(Base):
     raw_json_path: Mapped[str | None] = mapped_column(String, nullable=True)
     llm_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
+
+
+@event.listens_for(Finding, "before_insert")
+@event.listens_for(Finding, "before_update")
+def _set_finding_fingerprint(mapper, connection, target: Finding) -> None:
+    target.fingerprint = generate_finding_fingerprint(target)
