@@ -8,15 +8,18 @@ from app.crud.scan import get_scan, update_scan_status
 from app.crud.task import list_tasks_by_scan, update_task_status
 from app.db.database import SessionLocal
 from app.normalizers.gitleaks import normalize_gitleaks
+from app.normalizers.grype import normalize_grype
 from app.normalizers.semgrep import normalize_semgrep
 from app.normalizers.trivy import normalize_trivy
 from app.scanners.gitleaks import run_gitleaks
+from app.scanners.grype import run_grype_sbom
 from app.scanners.semgrep import run_semgrep
+from app.scanners.syft import run_syft
 from app.scanners.trivy import run_trivy_fs
 from app.services.scan_dirs import create_scan_dirs
 
 
-TASK_TOOL_ORDER = {"semgrep": 0, "gitleaks": 1, "trivy": 2}
+TASK_TOOL_ORDER = {"syft": 0, "grype": 1, "trivy": 2, "semgrep": 3, "gitleaks": 4}
 
 
 def _sorted_tasks(tasks):
@@ -34,6 +37,24 @@ def _scanner_for_tool(tool_name: str):
     if tool_name == "trivy":
         return run_trivy_fs, normalize_trivy, "trivy.json"
     raise ValueError(f"Unsupported scan tool: {tool_name}")
+
+
+def _raw_path_for_tool(tool_name: str, paths: dict[str, Path]) -> Path:
+    if tool_name == "syft":
+        return paths["raw_syft_sbom"]
+    if tool_name == "grype":
+        return paths["raw_grype"]
+    return paths["raw"] / f"{tool_name}.json"
+
+
+def _run_tool(tool_name: str, target_path: str, raw_path: Path, paths: dict[str, Path]):
+    if tool_name == "syft":
+        return run_syft(target_path, str(raw_path)), None
+    if tool_name == "grype":
+        return run_grype_sbom(str(paths["raw_syft_sbom"]), str(raw_path)), normalize_grype
+
+    runner, normalizer, _ = _scanner_for_tool(tool_name)
+    return runner(target_path, str(raw_path)), normalizer
 
 
 def _persist_raw_output(raw_path: Path, result) -> None:
@@ -81,7 +102,7 @@ def run_scan(scan_id: str) -> None:
 
         for task in tasks:
             tool_name = task.tool_name or ""
-            raw_path = paths["raw"] / f"{tool_name}.json"
+            raw_path = _raw_path_for_tool(tool_name, paths)
             task_started_at = datetime.utcnow()
             update_task_status(
                 db,
@@ -92,8 +113,7 @@ def run_scan(scan_id: str) -> None:
             )
 
             try:
-                runner, normalizer, _ = _scanner_for_tool(tool_name)
-                result = runner(scan.target_path, str(raw_path))
+                result, normalizer = _run_tool(tool_name, scan.target_path, raw_path, paths)
 
                 if result.exit_code != 0:
                     overall_failed = True
@@ -110,8 +130,9 @@ def run_scan(scan_id: str) -> None:
                     continue
 
                 _persist_raw_output(raw_path, result)
-                findings = normalizer(str(raw_path), scan_id)
-                _persist_findings(db, findings)
+                if normalizer is not None:
+                    findings = normalizer(str(raw_path), scan_id)
+                    _persist_findings(db, findings)
                 update_task_status(
                     db,
                     task_id=task.id,

@@ -83,6 +83,79 @@ def test_run_scan_persists_findings_and_updates_task_statuses(monkeypatch, tmp_p
     assert (raw_dir / "trivy.json").is_file()
 
 
+def test_run_scan_executes_syft_then_grype_and_persists_grype_findings(monkeypatch, tmp_path):
+    session_local = _configure_session(monkeypatch, tmp_path)
+    db = session_local()
+    try:
+        scan = create_scan(
+            db,
+            scan_id="scan_sbom",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="queued",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+        create_task(
+            db,
+            task_id="task_syft",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="syft",
+            status="queued",
+        )
+        create_task(
+            db,
+            task_id="task_grype",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="grype",
+            status="queued",
+        )
+    finally:
+        db.close()
+
+    grype_json = (Path(__file__).parent / "fixtures" / "sample_grype.json").read_text(encoding="utf-8")
+    calls: list[tuple[str, str, str]] = []
+
+    def fake_syft(target_path: str, output_path: str, timeout=None) -> CommandResult:
+        calls.append(("syft", target_path, output_path))
+        return CommandResult(stdout='{"artifacts":[]}', stderr="", exit_code=0)
+
+    def fake_grype(sbom_path: str, output_path: str, timeout=None) -> CommandResult:
+        calls.append(("grype", sbom_path, output_path))
+        return CommandResult(stdout=grype_json, stderr="", exit_code=0)
+
+    monkeypatch.setattr(hermes, "run_syft", fake_syft)
+    monkeypatch.setattr(hermes, "run_grype_sbom", fake_grype)
+
+    hermes.run_scan("scan_sbom")
+
+    db = session_local()
+    try:
+        scan = get_scan(db, "scan_sbom")
+        tasks = list_tasks_by_scan(db, "scan_sbom")
+        findings = list_findings_by_scan(db, "scan_sbom")
+    finally:
+        db.close()
+
+    raw_dir = tmp_path / "data" / "scans" / "scan_sbom" / "raw"
+    syft_path = raw_dir / "syft-sbom.json"
+    grype_path = raw_dir / "grype.json"
+
+    assert calls == [
+        ("syft", "C:/AI/projects/demo", str(syft_path)),
+        ("grype", str(syft_path), str(grype_path)),
+    ]
+    assert syft_path.is_file()
+    assert grype_path.is_file()
+    assert scan is not None
+    assert scan.status == "completed"
+    assert {task.status for task in tasks} == {"completed"}
+    assert Counter(finding.scanner for finding in findings) == Counter({"grype": 2})
+    assert {finding.cve for finding in findings} == {"CVE-2026-3000", "CVE-2026-4000"}
+    assert {finding.component for finding in findings} == {"lodash", "axios"}
+
+
 def test_run_scan_marks_failed_task_and_scan_failed(monkeypatch, tmp_path):
     session_local = _configure_session(monkeypatch, tmp_path)
     db = session_local()

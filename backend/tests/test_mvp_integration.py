@@ -98,7 +98,7 @@ def test_mvp_scan_to_findings_and_report_with_mock_scanners(monkeypatch, tmp_pat
         scan_id = created["scan_id"]
         assert created["status"] == "completed"
 
-        assert [call[0] for call in scanner_calls] == ["semgrep", "gitleaks", "trivy"]
+        assert [call[0] for call in scanner_calls] == ["trivy", "semgrep", "gitleaks"]
         assert {call[1] for call in scanner_calls} == {str(target_path)}
 
         raw_dir = tmp_path / "data" / "scans" / scan_id / "raw"
