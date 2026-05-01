@@ -1,0 +1,30 @@
+{
+  "matches": [
+    {
+      "vulnerability": {
+        "id": "CVE-2026-3000",
+        "severity": "High",
+        "fix": {
+          "versions": ["4.17.21"]
+        }
+      },
+      "artifact": {
+        "name": "lodash",
+        "version": "4.17.20"
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-4000",
+        "severity": "MEDIUM",
+        "fix": {
+          "versions": ["1.6.8", "1.7.0"]
+        }
+      },
+      "artifact": {
+        "name": "axios",
+        "version": "1.6.0"
+      }
+    }
+  ]
+}
