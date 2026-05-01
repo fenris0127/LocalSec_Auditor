@@ -1,0 +1,25 @@
+{
+  "Results": [
+    {
+      "Target": "src/package-lock.json",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-1000",
+          "PkgName": "lodash",
+          "InstalledVersion": "4.17.20",
+          "FixedVersion": "4.17.21",
+          "Severity": "HIGH",
+          "Title": "Prototype Pollution in lodash"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-2000",
+          "PkgName": "axios",
+          "InstalledVersion": "1.6.0",
+          "FixedVersion": "",
+          "Severity": "Medium",
+          "Title": "Denial of service in axios"
+        }
+      ]
+    }
+  ]
+}

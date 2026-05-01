@@ -38,3 +38,26 @@ def get_scan(db: Session, scan_id: str) -> Scan | None:
 
 def list_scans(db: Session) -> list[Scan]:
     return list(db.scalars(select(Scan).order_by(Scan.created_at.desc())))
+
+
+def update_scan_status(
+    db: Session,
+    *,
+    scan_id: str,
+    status: str,
+    started_at: datetime | None = None,
+    finished_at: datetime | None = None,
+) -> Scan | None:
+    scan = db.get(Scan, scan_id)
+    if scan is None:
+        return None
+
+    scan.status = status
+    if started_at is not None:
+        scan.started_at = started_at
+    if finished_at is not None:
+        scan.finished_at = finished_at
+
+    db.commit()
+    db.refresh(scan)
+    return scan

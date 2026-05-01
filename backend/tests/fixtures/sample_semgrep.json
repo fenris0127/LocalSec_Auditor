@@ -1,0 +1,48 @@
+{
+  "results": [
+    {
+      "check_id": "python.lang.security.sql-injection",
+      "path": "src/app.py",
+      "start": {
+        "line": 42
+      },
+      "extra": {
+        "severity": "ERROR",
+        "message": "Possible SQL injection"
+      }
+    },
+    {
+      "check_id": "python.lang.security.weak-crypto",
+      "path": "src/crypto.py",
+      "start": {
+        "line": 8
+      },
+      "extra": {
+        "severity": "WARNING",
+        "message": "Weak hash function"
+      }
+    },
+    {
+      "check_id": "python.lang.security.info-note",
+      "path": "src/info.py",
+      "start": {
+        "line": 1
+      },
+      "extra": {
+        "severity": "INFO",
+        "message": "Informational note"
+      }
+    },
+    {
+      "check_id": "python.lang.security.unknown",
+      "path": "src/unknown.py",
+      "start": {
+        "line": 99
+      },
+      "extra": {
+        "severity": "NOT_A_LEVEL",
+        "message": "Unknown severity"
+      }
+    }
+  ]
+}

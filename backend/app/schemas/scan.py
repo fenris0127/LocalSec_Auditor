@@ -8,6 +8,7 @@ class ScanCreateRequest(BaseModel):
     target_path: str
     scan_types: list[str]
     llm_enabled: bool = True
+    run_immediately: bool = False
 
 
 class ScanCreateResponse(BaseModel):

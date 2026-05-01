@@ -1,0 +1,14 @@
+[
+  {
+    "RuleID": "generic-api-key",
+    "File": "src/settings.py",
+    "StartLine": 14,
+    "Secret": "sk_test_1234567890"
+  },
+  {
+    "RuleID": "private-key",
+    "File": "src/keys.txt",
+    "StartLine": 3,
+    "Secret": "-----BEGIN PRIVATE KEY-----FAKE-----END PRIVATE KEY-----"
+  }
+]

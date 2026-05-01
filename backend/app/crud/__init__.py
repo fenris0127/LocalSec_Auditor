@@ -4,7 +4,7 @@ from app.crud.finding import (
     list_findings_by_scan,
     update_finding_llm_summary,
 )
-from app.crud.scan import create_scan, get_scan, list_scans
+from app.crud.scan import create_scan, get_scan, list_scans, update_scan_status
 from app.crud.task import create_task, list_tasks_by_scan, update_task_status
 
 
@@ -18,5 +18,6 @@ __all__ = [
     "list_scans",
     "list_tasks_by_scan",
     "update_finding_llm_summary",
+    "update_scan_status",
     "update_task_status",
 ]

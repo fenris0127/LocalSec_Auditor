@@ -48,8 +48,10 @@ def update_task_status(
         return None
 
     task.status = status
-    task.started_at = started_at
-    task.finished_at = finished_at
+    if started_at is not None:
+        task.started_at = started_at
+    if finished_at is not None:
+        task.finished_at = finished_at
     task.error_message = error_message
     db.commit()
     db.refresh(task)

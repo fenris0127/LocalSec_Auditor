@@ -4,6 +4,7 @@ from app.schemas.scan import (
     ScanResponse,
     ScanTaskResponse,
 )
+from app.schemas.finding import FindingCreate, FindingResponse
 
 
 __all__ = [
@@ -11,4 +12,6 @@ __all__ = [
     "ScanCreateResponse",
     "ScanResponse",
     "ScanTaskResponse",
+    "FindingCreate",
+    "FindingResponse",
 ]
