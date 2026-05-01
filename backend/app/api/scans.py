@@ -20,6 +20,14 @@ from app.schemas.finding import FindingResponse
 
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
+TASK_CREATION_ORDER = ["syft", "grype", "trivy", "semgrep", "gitleaks"]
+
+
+def _ordered_scan_types(scan_types: list[str]) -> list[str]:
+    requested = set(scan_types)
+    if "grype" in requested:
+        requested.add("syft")
+    return [scan_type for scan_type in TASK_CREATION_ORDER if scan_type in requested]
 
 
 @router.post("", response_model=ScanCreateResponse)
@@ -44,7 +52,7 @@ def create_scan_api(
         status=status,
     )
 
-    for scan_type in request.scan_types:
+    for scan_type in _ordered_scan_types(request.scan_types):
         create_task(
             db,
             task_id=f"task_{uuid4().hex}",

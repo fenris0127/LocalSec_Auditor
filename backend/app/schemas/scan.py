@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+ALLOWED_SCAN_TYPES = {"semgrep", "gitleaks", "trivy", "syft", "grype"}
 
 
 class ScanCreateRequest(BaseModel):
@@ -9,6 +12,14 @@ class ScanCreateRequest(BaseModel):
     scan_types: list[str]
     llm_enabled: bool = True
     run_immediately: bool = False
+
+    @field_validator("scan_types")
+    @classmethod
+    def validate_scan_types(cls, scan_types: list[str]) -> list[str]:
+        invalid_scan_types = sorted(set(scan_types) - ALLOWED_SCAN_TYPES)
+        if invalid_scan_types:
+            raise ValueError(f"unsupported scan_types: {', '.join(invalid_scan_types)}")
+        return scan_types
 
 
 class ScanCreateResponse(BaseModel):

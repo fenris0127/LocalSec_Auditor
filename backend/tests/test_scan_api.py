@@ -14,6 +14,11 @@ from app.db.database import get_db_session
 from app.main import app
 
 
+class FakeUuid:
+    def __init__(self, value: str):
+        self.hex = value
+
+
 def make_test_client(tmp_path):
     db_path = tmp_path / "api.db"
     engine = create_engine(
@@ -85,6 +90,93 @@ def test_create_scan_api_stores_scan_and_tasks(tmp_path):
         assert {task.tool_name for task in tasks} == {"semgrep", "gitleaks", "trivy"}
         assert {task.status for task in tasks} == {"queued"}
         assert {task.task_type for task in tasks} == {"scanner"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_scan_api_adds_syft_before_grype_when_grype_requested(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                    FakeUuid("0002"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["grype"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        db = session_local()
+        try:
+            tasks = list_tasks_by_scan(db, scan_id)
+        finally:
+            db.close()
+
+        assert [task.tool_name for task in tasks] == ["syft", "grype"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_scan_api_creates_new_scan_types_in_required_order(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                    FakeUuid("0002"),
+                    FakeUuid("0003"),
+                    FakeUuid("0004"),
+                    FakeUuid("0005"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["semgrep", "grype", "gitleaks", "trivy", "syft"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        db = session_local()
+        try:
+            tasks = list_tasks_by_scan(db, scan_id)
+        finally:
+            db.close()
+
+        assert [task.tool_name for task in tasks] == [
+            "syft",
+            "grype",
+            "trivy",
+            "semgrep",
+            "gitleaks",
+        ]
     finally:
         app.dependency_overrides.clear()
 
