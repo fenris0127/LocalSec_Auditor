@@ -13,3 +13,12 @@ class RagDocumentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_metadata: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class RagVectorChunk(Base):
+    __tablename__ = "rag_vector_chunks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_metadata: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[str] = mapped_column(Text, nullable=False)
