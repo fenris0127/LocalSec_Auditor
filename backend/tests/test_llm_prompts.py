@@ -85,3 +85,42 @@ def test_build_finding_analysis_prompt_masks_secret_like_values():
 
     assert secret_value not in prompt
     assert "[REDACTED_SECRET]" in prompt
+
+
+def test_build_finding_analysis_prompt_includes_reference_context_when_provided():
+    finding = FindingCreate(
+        id="finding-4",
+        scan_id="scan-4",
+        category="cve",
+        scanner="grype",
+        severity="high",
+        title="lodash vulnerability",
+        component="lodash",
+        cve="CVE-2026-0001",
+    )
+
+    prompt = build_finding_analysis_prompt(
+        finding,
+        reference_context="OWASP guidance: update vulnerable dependencies and verify lockfiles.",
+    )
+
+    assert "참고 근거" in prompt
+    assert "OWASP guidance: update vulnerable dependencies and verify lockfiles." in prompt
+    assert "scanner 결과와 reference_context" in prompt
+    assert "reference_context만으로 입력에 없는 CVE를 만들지 마라" in prompt
+    assert "cve: CVE-2026-0001" in prompt
+
+
+def test_build_finding_analysis_prompt_omits_reference_context_section_when_empty():
+    finding = FindingCreate(
+        id="finding-5",
+        scan_id="scan-5",
+        category="cve",
+        scanner="trivy",
+        severity="medium",
+        title="axios vulnerability",
+    )
+
+    prompt = build_finding_analysis_prompt(finding)
+
+    assert "참고 근거" not in prompt

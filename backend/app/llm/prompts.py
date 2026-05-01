@@ -18,7 +18,26 @@ def _format_value(value: Any) -> str:
     return text if text else "없음"
 
 
-def build_finding_analysis_prompt(finding: Any) -> str:
+def _format_reference_context(reference_context: Any) -> str:
+    if reference_context is None:
+        return ""
+    if isinstance(reference_context, str):
+        context = mask_secret_text(reference_context).strip()
+    else:
+        context = mask_secret_text("\n\n".join(str(item) for item in reference_context)).strip()
+    if not context:
+        return ""
+    return f"""
+
+참고 근거:
+아래 내용은 scanner 결과가 아니라 관련 보안 기준 문서에서 검색된 참고 근거다.
+scanner 결과와 reference_context를 반드시 구분하고, reference_context만으로 입력에 없는 CVE를 만들지 마라.
+
+{context}
+""".rstrip()
+
+
+def build_finding_analysis_prompt(finding: Any, reference_context: Any = None) -> str:
     scanner = _format_value(_get_field(finding, "scanner"))
     category = _format_value(_get_field(finding, "category"))
     severity = _format_value(_get_field(finding, "severity"))
@@ -36,6 +55,7 @@ def build_finding_analysis_prompt(finding: Any) -> str:
             "\n주의: 이 Finding은 Secret 카테고리다. "
             "Secret 원문은 제공되지 않았으며, 원문 secret 값을 추측하거나 복원하려고 시도하지 마라."
         )
+    formatted_reference_context = _format_reference_context(reference_context)
 
     return f"""
 당신은 LocalSec Auditor의 보안 분석가다.
@@ -60,6 +80,7 @@ def build_finding_analysis_prompt(finding: Any) -> str:
 - cve: {cve}
 - cwe: {cwe}
 - raw_json_path: {raw_json_path}{secret_notice}
+{formatted_reference_context}
 
 출력 형식은 반드시 아래 5개 섹션만 사용하라:
 1. 요약
