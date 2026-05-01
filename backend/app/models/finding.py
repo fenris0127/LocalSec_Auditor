@@ -20,10 +20,13 @@ class Finding(Base):
     file_path: Mapped[str | None] = mapped_column(String, nullable=True)
     line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     component: Mapped[str | None] = mapped_column(String, nullable=True)
+    installed_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    fixed_version: Mapped[str | None] = mapped_column(String, nullable=True)
     cve: Mapped[str | None] = mapped_column(String, nullable=True)
     cwe: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_json_path: Mapped[str | None] = mapped_column(String, nullable=True)
     llm_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detected_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
 
 
