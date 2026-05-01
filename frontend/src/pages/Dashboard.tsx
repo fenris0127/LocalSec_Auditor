@@ -6,7 +6,7 @@ import type { ScanSummary } from "../api/scans";
 import { getToolsStatus } from "../api/tools";
 import type { ToolName, ToolsStatusResponse } from "../api/tools";
 
-const TOOL_NAMES: ToolName[] = ["semgrep", "gitleaks", "trivy"];
+const TOOL_NAMES: ToolName[] = ["semgrep", "gitleaks", "trivy", "syft", "grype"];
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {

@@ -4,7 +4,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { createScan } from "../api/scans";
 import type { ScanType } from "../api/scans";
 
-const SCAN_TYPES: ScanType[] = ["semgrep", "gitleaks", "trivy"];
+const SCAN_TYPES: ScanType[] = ["semgrep", "gitleaks", "trivy", "syft", "grype"];
 
 export function NewScan(): ReactElement {
   const [projectName, setProjectName] = useState("");
@@ -33,7 +33,11 @@ export function NewScan(): ReactElement {
     const scanType = event.target.value as ScanType;
     setSelectedScanTypes((current) => {
       if (event.target.checked) {
-        return current.includes(scanType) ? current : [...current, scanType];
+        const next = current.includes(scanType) ? current : [...current, scanType];
+        if (scanType === "grype" && !next.includes("syft")) {
+          return [...next, "syft"];
+        }
+        return next;
       }
       return current.filter((item) => item !== scanType);
     });
@@ -117,6 +121,9 @@ export function NewScan(): ReactElement {
               </label>
             ))}
           </div>
+          {selectedScanTypes.includes("grype") ? (
+            <p className="muted">Grype uses a Syft SBOM, so Syft will be queued with Grype.</p>
+          ) : null}
         </fieldset>
 
         <label className="checkbox-row">

@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../config/api";
 
-export type ScanType = "semgrep" | "gitleaks" | "trivy";
+export type ScanType = "semgrep" | "gitleaks" | "trivy" | "syft" | "grype";
 
 export interface CreateScanPayload {
   project_name: string;

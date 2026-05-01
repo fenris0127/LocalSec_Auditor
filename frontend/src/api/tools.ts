@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../config/api";
 
-export type ToolName = "semgrep" | "gitleaks" | "trivy";
+export type ToolName = "semgrep" | "gitleaks" | "trivy" | "syft" | "grype";
 
 export interface ToolStatus {
   installed: boolean;
