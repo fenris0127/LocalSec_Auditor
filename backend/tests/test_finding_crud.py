@@ -103,6 +103,46 @@ def test_get_finding(tmp_path):
         db.close()
 
 
+def test_create_cce_finding_with_system_setting_values(tmp_path):
+    db = make_session(tmp_path)
+    try:
+        create_scan(
+            db,
+            scan_id="scan_cce",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="created",
+        )
+
+        finding = create_finding(
+            db,
+            finding_id="finding_cce_001",
+            scan_id="scan_cce",
+            category="cce",
+            scanner="openscap",
+            severity="high",
+            title="SSH root login is enabled",
+            status="open",
+            rule_id="xccdf_org.ssgproject.content_rule_sshd_disable_root_login",
+            cce_id="CCE-80801-6",
+            current_value="PermitRootLogin yes",
+            expected_value="PermitRootLogin no",
+            raw_json_path="data/scans/scan_cce/raw/openscap.xml",
+        )
+
+        saved = get_finding(db, "finding_cce_001")
+
+        assert finding.category == "cce"
+        assert saved is not None
+        assert saved.scanner == "openscap"
+        assert saved.rule_id == "xccdf_org.ssgproject.content_rule_sshd_disable_root_login"
+        assert saved.cce_id == "CCE-80801-6"
+        assert saved.current_value == "PermitRootLogin yes"
+        assert saved.expected_value == "PermitRootLogin no"
+    finally:
+        db.close()
+
+
 def test_update_finding_llm_summary(tmp_path):
     db = make_session(tmp_path)
     try:
