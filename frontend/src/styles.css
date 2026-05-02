@@ -377,6 +377,71 @@ tbody tr:last-child td {
   white-space: pre-wrap;
 }
 
+.reference-contexts {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.reference-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reference-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.reference-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.reference-meta span {
+  color: #263646;
+  font-weight: 700;
+}
+
+.reference-meta code {
+  color: #405266;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.reference-meta small {
+  color: #657789;
+  font-weight: 700;
+}
+
+.reference-item p {
+  margin: 0;
+  color: #405266;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.reference-chunk summary {
+  width: fit-content;
+  color: #1e4f7a;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.reference-chunk p {
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid #e6edf3;
+  border-radius: 6px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

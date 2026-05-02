@@ -45,10 +45,38 @@ export interface Finding {
   file_path: string | null;
   line: number | null;
   llm_summary: string | null;
+  reference_context?: ReferenceContext[];
+  reference_contexts?: ReferenceContext[];
+  references?: ReferenceContext[];
 }
 
 export interface AnalyzeFindingResponse {
   llm_summary: string;
+  reference_context?: ReferenceContext[];
+  reference_contexts?: ReferenceContext[];
+  references?: ReferenceContext[];
+}
+
+export interface ReferenceContext {
+  id?: string;
+  source_title?: string | null;
+  source_path?: string | null;
+  source_name?: string | null;
+  title?: string | null;
+  path?: string | null;
+  chunk_index?: number | string | null;
+  chunk_summary?: string | null;
+  summary?: string | null;
+  chunk_text?: string | null;
+  content?: string | null;
+  text?: string | null;
+  metadata?: {
+    title?: string | null;
+    source_path?: string | null;
+    source_name?: string | null;
+    chunk_index?: number | string | null;
+    summary?: string | null;
+  };
 }
 
 export interface ScanReportResponse {

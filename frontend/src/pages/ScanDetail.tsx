@@ -9,7 +9,7 @@ import {
   listScanFindings,
   listScanTasks,
 } from "../api/scans";
-import type { Finding, ScanSummary, ScanTask } from "../api/scans";
+import type { AnalyzeFindingResponse, Finding, ReferenceContext, ScanSummary, ScanTask } from "../api/scans";
 
 interface ScanDetailProps {
   scanId: string | null;
@@ -22,6 +22,21 @@ function display(value: string | number | null): string {
   return String(value);
 }
 
+function maskSecretText(value: string): string {
+  return value
+    .replace(/sk_(?:test|live)_[A-Za-z0-9_=-]+/g, "[REDACTED_SECRET]")
+    .replace(/ghp_[A-Za-z0-9_]+/g, "[REDACTED_SECRET]")
+    .replace(
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+      "[REDACTED_SECRET]",
+    )
+    .replace(/("Secret"\s*:\s*")[^"]+(")/gi, "$1[REDACTED_SECRET]$2");
+}
+
+function referenceDisplay(value: string | number | null): string {
+  return maskSecretText(display(value));
+}
+
 function formatDate(value: string | null): string {
   if (!value) {
     return "N/A";
@@ -30,6 +45,87 @@ function formatDate(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function referenceContextsFrom(value: Finding | AnalyzeFindingResponse): ReferenceContext[] {
+  return value.reference_context ?? value.reference_contexts ?? value.references ?? [];
+}
+
+function referenceSource(context: ReferenceContext): string {
+  return referenceDisplay(
+    context.source_title ??
+      context.title ??
+      context.metadata?.title ??
+      context.source_path ??
+      context.path ??
+      context.metadata?.source_path ??
+      context.source_name ??
+      context.metadata?.source_name ??
+      null,
+  );
+}
+
+function referencePath(context: ReferenceContext): string | null {
+  return (
+    context.source_path ??
+    context.path ??
+    context.metadata?.source_path ??
+    context.source_name ??
+    context.metadata?.source_name ??
+    null
+  );
+}
+
+function referenceChunkIndex(context: ReferenceContext): string | null {
+  const index = context.chunk_index ?? context.metadata?.chunk_index ?? null;
+  return index === null ? null : String(index);
+}
+
+function referenceSummary(context: ReferenceContext): string | null {
+  return context.chunk_summary ?? context.summary ?? context.metadata?.summary ?? null;
+}
+
+function referenceText(context: ReferenceContext): string | null {
+  return context.chunk_text ?? context.content ?? context.text ?? null;
+}
+
+function ReferenceDocuments({ contexts }: { contexts: ReferenceContext[] }): ReactElement | null {
+  if (contexts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="reference-contexts">
+      <strong>Reference context</strong>
+      <div className="reference-list">
+        {contexts.map((context, index) => {
+          const path = referencePath(context);
+          const chunkIndex = referenceChunkIndex(context);
+          const summary = referenceSummary(context);
+          const text = referenceText(context);
+          const shouldCollapse = Boolean(text && text.length > 360);
+
+          return (
+            <article className="reference-item" key={context.id ?? `${referenceSource(context)}-${index}`}>
+              <div className="reference-meta">
+                <span>{referenceSource(context)}</span>
+                {path ? <code>{referenceDisplay(path)}</code> : null}
+                {chunkIndex ? <small>Chunk {referenceDisplay(chunkIndex)}</small> : null}
+              </div>
+              {summary ? <p>{maskSecretText(summary)}</p> : null}
+              {text && shouldCollapse ? (
+                <details className="reference-chunk">
+                  <summary>Chunk text</summary>
+                  <p>{maskSecretText(text)}</p>
+                </details>
+              ) : null}
+              {text && !shouldCollapse && !summary ? <p>{maskSecretText(text)}</p> : null}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
@@ -113,7 +209,13 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
       const result = await analyzeFinding(findingId);
       setFindings((current) =>
         current.map((finding) =>
-          finding.id === findingId ? { ...finding, llm_summary: result.llm_summary } : finding,
+          finding.id === findingId
+            ? {
+                ...finding,
+                llm_summary: result.llm_summary,
+                reference_context: referenceContextsFrom(result),
+              }
+            : finding,
         ),
       );
     } catch (error) {
@@ -287,6 +389,7 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                   {findings.map((finding) => {
                     const isAnalyzing = Boolean(analyzingFindingIds[finding.id]);
                     const analysisError = analysisErrors[finding.id];
+                    const referenceContexts = referenceContextsFrom(finding);
 
                     return (
                       <Fragment key={finding.id}>
@@ -312,7 +415,7 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                             </button>
                           </td>
                         </tr>
-                        {analysisError || finding.llm_summary ? (
+                        {analysisError || finding.llm_summary || referenceContexts.length > 0 ? (
                           <tr key={`${finding.id}-analysis`}>
                             <td className="analysis-cell" colSpan={7}>
                               {analysisError ? (
@@ -327,6 +430,7 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                                   <p>{finding.llm_summary}</p>
                                 </div>
                               ) : null}
+                              <ReferenceDocuments contexts={referenceContexts} />
                             </td>
                           </tr>
                         ) : null}
