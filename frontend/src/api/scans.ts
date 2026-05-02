@@ -16,6 +16,7 @@ export interface CreateScanResponse {
 
 export interface ScanSummary {
   id: string;
+  project_id: string | null;
   project_name: string;
   target_path: string;
   status: string;
@@ -52,6 +53,27 @@ export interface Finding {
   reference_context?: ReferenceContext[];
   reference_contexts?: ReferenceContext[];
   references?: ReferenceContext[];
+}
+
+export interface FindingComparisonSummary {
+  total: number;
+  by_severity: Record<string, number>;
+  by_category: Record<string, number>;
+}
+
+export interface ScanComparisonSummary {
+  new_findings: FindingComparisonSummary;
+  resolved_findings: FindingComparisonSummary;
+  persistent_findings: FindingComparisonSummary;
+}
+
+export interface ScanComparisonResponse {
+  base_scan_id: string;
+  target_scan_id: string;
+  new_findings: Finding[];
+  resolved_findings: Finding[];
+  persistent_findings: Finding[];
+  summary: ScanComparisonSummary;
 }
 
 export interface AnalyzeFindingResponse {
@@ -158,6 +180,13 @@ export function listScanFindings(scanId: string): Promise<Finding[]> {
   return requestJson<Finding[]>(
     `/api/scans/${encodeURIComponent(scanId)}/findings`,
     "Could not load findings",
+  );
+}
+
+export function compareScanWithLatest(scanId: string): Promise<ScanComparisonResponse> {
+  return requestJson<ScanComparisonResponse>(
+    `/api/scans/${encodeURIComponent(scanId)}/compare/latest`,
+    "Could not compare scan",
   );
 }
 

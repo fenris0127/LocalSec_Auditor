@@ -3,13 +3,22 @@ import type { ReactElement } from "react";
 
 import {
   analyzeFinding,
+  compareScanWithLatest,
   createScanReport,
   getScan,
   getScanReport,
   listScanFindings,
   listScanTasks,
 } from "../api/scans";
-import type { AnalyzeFindingResponse, Finding, ReferenceContext, ScanSummary, ScanTask } from "../api/scans";
+import type {
+  AnalyzeFindingResponse,
+  Finding,
+  FindingComparisonSummary,
+  ReferenceContext,
+  ScanComparisonResponse,
+  ScanSummary,
+  ScanTask,
+} from "../api/scans";
 
 interface ScanDetailProps {
   scanId: string | null;
@@ -92,6 +101,108 @@ function referenceText(context: ReferenceContext): string | null {
 function isConfigFinding(finding: Finding): boolean {
   const category = finding.category.toLowerCase();
   return category === "cce" || category === "config";
+}
+
+function sortedSummaryEntries(values: Record<string, number>): [string, number][] {
+  return Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function ComparisonSummaryBlock({
+  label,
+  summary,
+}: {
+  label: string;
+  summary: FindingComparisonSummary;
+}): ReactElement {
+  const severityEntries = sortedSummaryEntries(summary.by_severity);
+
+  return (
+    <div className="comparison-summary-card">
+      <strong>{label}</strong>
+      <span>{summary.total}</span>
+      {severityEntries.length > 0 ? (
+        <div className="severity-summary-list">
+          {severityEntries.map(([severity, count]) => (
+            <span className="status-pill" key={severity}>
+              {severity}: {count}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">No severity counts.</p>
+      )}
+    </div>
+  );
+}
+
+function ComparisonFindingTable({
+  title,
+  findings,
+}: {
+  title: string;
+  findings: Finding[];
+}): ReactElement {
+  return (
+    <div className="comparison-finding-group">
+      <h3>{title}</h3>
+      {findings.length === 0 ? (
+        <p className="muted">No findings.</p>
+      ) : (
+        <div className="table-panel compact">
+          <table className="comparison-table">
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Category</th>
+                <th>Title</th>
+                <th>Scanner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {findings.map((finding) => (
+                <tr key={finding.id}>
+                  <td>
+                    <span className="status-pill">{finding.severity}</span>
+                  </td>
+                  <td>
+                    <span className={isConfigFinding(finding) ? "category-pill config" : "category-pill"}>
+                      {finding.category}
+                    </span>
+                  </td>
+                  <td>{finding.title}</td>
+                  <td>{finding.scanner}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScanComparisonPanel({
+  comparison,
+}: {
+  comparison: ScanComparisonResponse;
+}): ReactElement {
+  return (
+    <div className="comparison-results">
+      <p className="muted">
+        Base scan: {comparison.base_scan_id} / Current scan: {comparison.target_scan_id}
+      </p>
+      <div className="comparison-summary-grid">
+        <ComparisonSummaryBlock label="New findings" summary={comparison.summary.new_findings} />
+        <ComparisonSummaryBlock label="Resolved findings" summary={comparison.summary.resolved_findings} />
+        <ComparisonSummaryBlock label="Persistent findings" summary={comparison.summary.persistent_findings} />
+      </div>
+      <div className="comparison-groups">
+        <ComparisonFindingTable title="New findings" findings={comparison.new_findings} />
+        <ComparisonFindingTable title="Resolved findings" findings={comparison.resolved_findings} />
+        <ComparisonFindingTable title="Persistent findings" findings={comparison.persistent_findings} />
+      </div>
+    </div>
+  );
 }
 
 function CceFindingDetails({ finding }: { finding: Finding }): ReactElement | null {
@@ -184,6 +295,10 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<ScanComparisonResponse | null>(null);
+  const [isLoadingComparison, setIsLoadingComparison] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparisonNotice, setComparisonNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -197,6 +312,9 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
       setReportContent(null);
       setReportPath(null);
       setReportError(null);
+      setComparison(null);
+      setComparisonError(null);
+      setComparisonNotice(null);
       setScan(null);
       setTasks([]);
       setFindings([]);
@@ -301,6 +419,27 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
     }
   }
 
+  async function handleCompareWithLatest(id: string): Promise<void> {
+    setIsLoadingComparison(true);
+    setComparison(null);
+    setComparisonError(null);
+    setComparisonNotice(null);
+
+    try {
+      const result = await compareScanWithLatest(id);
+      setComparison(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not compare scan";
+      if (message === "Previous scan not found") {
+        setComparisonNotice("No previous scan is available for this project.");
+      } else {
+        setComparisonError(message);
+      }
+    } finally {
+      setIsLoadingComparison(false);
+    }
+  }
+
   if (!scanId) {
     return (
       <section className="page-section">
@@ -398,6 +537,47 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
               <p className="muted">No tasks found.</p>
             )}
           </div>
+        </div>
+      ) : null}
+
+      {scan ? (
+        <div className="summary-panel">
+          <div className="panel-heading-row">
+            <h2>Scan comparison</h2>
+            <button
+              className="inline-action"
+              disabled={isLoadingComparison}
+              type="button"
+              onClick={() => {
+                void handleCompareWithLatest(scan.id);
+              }}
+            >
+              {isLoadingComparison ? "Comparing" : "Compare previous scan"}
+            </button>
+          </div>
+
+          {isLoadingComparison ? (
+            <div className="empty-panel compact" role="status">
+              <strong>Loading comparison</strong>
+              <span>Fetching changes from the latest previous scan.</span>
+            </div>
+          ) : null}
+
+          {comparisonNotice ? (
+            <div className="empty-panel compact">
+              <strong>No previous scan</strong>
+              <span>{comparisonNotice}</span>
+            </div>
+          ) : null}
+
+          {comparisonError ? (
+            <div className="status-message error" role="alert">
+              <strong>Could not compare scans</strong>
+              <span>{comparisonError}</span>
+            </div>
+          ) : null}
+
+          {comparison ? <ScanComparisonPanel comparison={comparison} /> : null}
         </div>
       ) : null}
 
