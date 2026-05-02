@@ -18,7 +18,7 @@ from app.schemas.scan import (
     ScanTaskResponse,
 )
 from app.schemas.finding import FindingResponse
-from app.services.scan_compare import compare_scans
+from app.services.scan_compare import compare_scans, get_previous_scan
 
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -110,6 +110,45 @@ def list_scan_findings_api(
     return list_findings_by_scan(db, scan_id)
 
 
+def _to_scan_comparison_response(comparison) -> ScanComparisonResponse:
+    return ScanComparisonResponse(
+        base_scan_id=comparison.base_scan_id,
+        target_scan_id=comparison.target_scan_id,
+        new_findings=comparison.new_findings,
+        resolved_findings=comparison.resolved_findings,
+        persistent_findings=comparison.persistent_findings,
+        summary={
+            name: {
+                "total": stats.total,
+                "by_severity": stats.by_severity,
+                "by_category": stats.by_category,
+            }
+            for name, stats in comparison.stats.items()
+        },
+    )
+
+
+@router.get("/{scan_id}/compare/latest", response_model=ScanComparisonResponse)
+def compare_scan_with_latest_previous_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> ScanComparisonResponse:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        previous_scan = get_previous_scan(scan_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if previous_scan is None:
+        raise HTTPException(status_code=404, detail="Previous scan not found")
+
+    comparison = compare_scans(previous_scan.id, scan_id, db=db)
+    return _to_scan_comparison_response(comparison)
+
+
 @router.get("/{scan_id}/compare", response_model=ScanComparisonResponse)
 def compare_scan_api(
     scan_id: str,
@@ -129,21 +168,7 @@ def compare_scan_api(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    return ScanComparisonResponse(
-        base_scan_id=comparison.base_scan_id,
-        target_scan_id=comparison.target_scan_id,
-        new_findings=comparison.new_findings,
-        resolved_findings=comparison.resolved_findings,
-        persistent_findings=comparison.persistent_findings,
-        summary={
-            name: {
-                "total": stats.total,
-                "by_severity": stats.by_severity,
-                "by_category": stats.by_category,
-            }
-            for name, stats in comparison.stats.items()
-        },
-    )
+    return _to_scan_comparison_response(comparison)
 
 
 @router.post("/{scan_id}/report")

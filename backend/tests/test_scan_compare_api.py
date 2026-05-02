@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -48,6 +49,7 @@ def create_comparable_scans(session_local) -> None:
             project_name="demo",
             target_path="C:/AI/projects/demo",
             status="completed",
+            created_at=datetime(2026, 5, 2, 10, 0, 0),
         )
         create_scan(
             db,
@@ -56,6 +58,7 @@ def create_comparable_scans(session_local) -> None:
             project_name="demo",
             target_path="C:/AI/projects/demo",
             status="completed",
+            created_at=datetime(2026, 5, 2, 11, 0, 0),
         )
         create_finding(
             db,
@@ -250,5 +253,69 @@ def test_scan_compare_api_returns_400_for_different_projects(tmp_path):
 
         assert response.status_code == 400
         assert "same project_id" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_scan_compare_latest_api_uses_latest_previous_scan(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        create_comparable_scans(session_local)
+        db = session_local()
+        try:
+            create_scan(
+                db,
+                scan_id="scan_older",
+                project_id="project_001",
+                project_name="demo",
+                target_path="C:/AI/projects/demo",
+                status="completed",
+                created_at=datetime(2026, 5, 2, 9, 0, 0),
+            )
+        finally:
+            db.close()
+
+        response = client.get("/api/scans/scan_target/compare/latest")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["base_scan_id"] == "scan_base"
+        assert body["target_scan_id"] == "scan_target"
+        assert [finding["id"] for finding in body["new_findings"]] == ["target_new"]
+        assert [finding["id"] for finding in body["resolved_findings"]] == ["base_resolved"]
+        assert [finding["id"] for finding in body["persistent_findings"]] == [
+            "target_persistent"
+        ]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_scan_compare_latest_api_returns_404_when_previous_scan_missing(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        db = session_local()
+        try:
+            create_project(
+                db,
+                project_id="project_001",
+                name="demo",
+                root_path="C:/AI/projects/demo",
+            )
+            create_scan(
+                db,
+                scan_id="scan_current",
+                project_id="project_001",
+                project_name="demo",
+                target_path="C:/AI/projects/demo",
+                status="completed",
+                created_at=datetime(2026, 5, 2, 10, 0, 0),
+            )
+        finally:
+            db.close()
+
+        response = client.get("/api/scans/scan_current/compare/latest")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Previous scan not found"
     finally:
         app.dependency_overrides.clear()

@@ -8,7 +8,7 @@ from app.crud.finding import create_finding
 from app.crud.project import create_project
 from app.crud.scan import create_scan
 from app.db.base import Base
-from app.services.scan_compare import compare_scans
+from app.services.scan_compare import compare_scans, get_previous_scan
 
 
 def make_session(tmp_path):
@@ -193,5 +193,98 @@ def test_compare_scans_rejects_different_projects(tmp_path):
 
         with pytest.raises(ValueError, match="same project_id"):
             compare_scans("scan_base", "scan_target", db=db)
+    finally:
+        db.close()
+
+
+def test_get_previous_scan_returns_latest_earlier_scan_in_same_project(tmp_path):
+    db = make_session(tmp_path)
+    try:
+        create_project(
+            db,
+            project_id="project_001",
+            name="demo",
+            root_path="C:/AI/projects/demo",
+        )
+        create_project(
+            db,
+            project_id="project_other",
+            name="other",
+            root_path="C:/AI/projects/other",
+        )
+        create_scan(
+            db,
+            scan_id="scan_old",
+            project_id="project_001",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 9, 0, 0),
+        )
+        create_scan(
+            db,
+            scan_id="scan_previous",
+            project_id="project_001",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 10, 0, 0),
+        )
+        create_scan(
+            db,
+            scan_id="scan_same_time",
+            project_id="project_001",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 11, 0, 0),
+        )
+        create_scan(
+            db,
+            scan_id="scan_current",
+            project_id="project_001",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 11, 0, 0),
+        )
+        create_scan(
+            db,
+            scan_id="scan_other_project",
+            project_id="project_other",
+            project_name="other",
+            target_path="C:/AI/projects/other",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 10, 30, 0),
+        )
+
+        previous = get_previous_scan("scan_current", db=db)
+
+        assert previous is not None
+        assert previous.id == "scan_previous"
+    finally:
+        db.close()
+
+
+def test_get_previous_scan_returns_none_when_no_earlier_scan_exists(tmp_path):
+    db = make_session(tmp_path)
+    try:
+        create_project(
+            db,
+            project_id="project_001",
+            name="demo",
+            root_path="C:/AI/projects/demo",
+        )
+        create_scan(
+            db,
+            scan_id="scan_current",
+            project_id="project_001",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 5, 2, 10, 0, 0),
+        )
+
+        assert get_previous_scan("scan_current", db=db) is None
     finally:
         db.close()
