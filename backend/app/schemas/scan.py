@@ -3,7 +3,15 @@ from datetime import datetime
 from pydantic import BaseModel, field_validator
 
 
-ALLOWED_SCAN_TYPES = {"semgrep", "gitleaks", "trivy", "syft", "grype"}
+ALLOWED_SCAN_TYPES = {
+    "semgrep",
+    "gitleaks",
+    "trivy",
+    "syft",
+    "grype",
+    "lynis",
+    "openscap",
+}
 
 
 class ScanCreateRequest(BaseModel):

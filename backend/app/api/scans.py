@@ -20,7 +20,7 @@ from app.schemas.finding import FindingResponse
 
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
-TASK_CREATION_ORDER = ["syft", "grype", "trivy", "semgrep", "gitleaks"]
+TASK_CREATION_ORDER = ["syft", "grype", "trivy", "semgrep", "gitleaks", "lynis", "openscap"]
 
 
 def _ordered_scan_types(scan_types: list[str]) -> list[str]:
