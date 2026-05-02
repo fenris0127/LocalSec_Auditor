@@ -41,9 +41,13 @@ export interface Finding {
   severity: string;
   category: string;
   title: string;
+  rule_id: string | null;
   scanner: string;
   file_path: string | null;
   line: number | null;
+  cce_id: string | null;
+  current_value: string | null;
+  expected_value: string | null;
   llm_summary: string | null;
   reference_context?: ReferenceContext[];
   reference_contexts?: ReferenceContext[];

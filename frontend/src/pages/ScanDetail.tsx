@@ -89,6 +89,48 @@ function referenceText(context: ReferenceContext): string | null {
   return context.chunk_text ?? context.content ?? context.text ?? null;
 }
 
+function isConfigFinding(finding: Finding): boolean {
+  const category = finding.category.toLowerCase();
+  return category === "cce" || category === "config";
+}
+
+function CceFindingDetails({ finding }: { finding: Finding }): ReactElement | null {
+  if (!isConfigFinding(finding)) {
+    return null;
+  }
+
+  return (
+    <div className="config-finding-detail">
+      <strong>System configuration detail</strong>
+      <dl className="config-value-grid">
+        <div>
+          <dt>Rule ID</dt>
+          <dd>{display(finding.rule_id)}</dd>
+        </div>
+        <div>
+          <dt>CCE ID</dt>
+          <dd>{display(finding.cce_id)}</dd>
+        </div>
+        <div>
+          <dt>Current value</dt>
+          <dd>{display(finding.current_value)}</dd>
+        </div>
+        <div>
+          <dt>Expected value</dt>
+          <dd>{display(finding.expected_value)}</dd>
+        </div>
+      </dl>
+      <div className="config-guidance">
+        <strong>Rollback / Verification</strong>
+        <p>
+          Record the current setting before any reviewed manual change. Verify by re-running the same
+          scanner/profile and keep the original value available for rollback.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ReferenceDocuments({ contexts }: { contexts: ReferenceContext[] }): ReactElement | null {
   if (contexts.length === 0) {
     return null;
@@ -390,14 +432,19 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                     const isAnalyzing = Boolean(analyzingFindingIds[finding.id]);
                     const analysisError = analysisErrors[finding.id];
                     const referenceContexts = referenceContextsFrom(finding);
+                    const isConfigurationFinding = isConfigFinding(finding);
 
                     return (
                       <Fragment key={finding.id}>
-                        <tr>
+                        <tr className={isConfigurationFinding ? "config-finding-row" : undefined}>
                           <td>
                             <span className="status-pill">{finding.severity}</span>
                           </td>
-                          <td>{finding.category}</td>
+                          <td>
+                            <span className={isConfigurationFinding ? "category-pill config" : "category-pill"}>
+                              {finding.category}
+                            </span>
+                          </td>
                           <td>{finding.title}</td>
                           <td>{finding.scanner}</td>
                           <td>{display(finding.file_path)}</td>
@@ -415,7 +462,10 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                             </button>
                           </td>
                         </tr>
-                        {analysisError || finding.llm_summary || referenceContexts.length > 0 ? (
+                        {analysisError ||
+                        finding.llm_summary ||
+                        referenceContexts.length > 0 ||
+                        isConfigurationFinding ? (
                           <tr key={`${finding.id}-analysis`}>
                             <td className="analysis-cell" colSpan={7}>
                               {analysisError ? (
@@ -430,6 +480,7 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
                                   <p>{finding.llm_summary}</p>
                                 </div>
                               ) : null}
+                              <CceFindingDetails finding={finding} />
                               <ReferenceDocuments contexts={referenceContexts} />
                             </td>
                           </tr>

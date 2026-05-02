@@ -324,6 +324,30 @@ tbody tr:last-child td {
   color: #8a5a12;
 }
 
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  border-radius: 6px;
+  background: #eef3f7;
+  color: #405266;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  text-transform: lowercase;
+}
+
+.category-pill.config {
+  border: 1px solid #b8d9cc;
+  background: #edf8f3;
+  color: #1f5f4c;
+}
+
+.config-finding-row td {
+  background: #fbfefd;
+}
+
 .inline-action {
   min-width: 76px;
   border: 0;
@@ -375,6 +399,42 @@ tbody tr:last-child td {
   color: #405266;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.config-finding-detail {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #b8d9cc;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.config-value-grid {
+  gap: 8px;
+}
+
+.config-value-grid div {
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.config-value-grid dt,
+.config-value-grid dd {
+  font-size: 13px;
+}
+
+.config-guidance {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid #e6edf3;
+  padding-top: 10px;
+}
+
+.config-guidance p {
+  margin: 0;
+  color: #405266;
+  line-height: 1.6;
 }
 
 .reference-contexts {
