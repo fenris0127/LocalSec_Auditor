@@ -9,6 +9,7 @@ from app.crud.finding import create_finding
 from app.crud.scan import create_scan
 from app.db.base import Base
 from app.reports import generator
+from app.rag.vector_store import VectorSearchResult
 
 
 class MemoryPath:
@@ -134,4 +135,98 @@ def test_generate_markdown_report_creates_report_with_stats_and_llm_summary(monk
     assert "Secret detected: generic-api-key" in report
     assert secret_value not in report
     assert secret_api_key not in report
+    assert "[REDACTED_SECRET]" in report
+
+
+def test_generate_markdown_report_includes_rag_reference_documents(monkeypatch):
+    scan_id = f"report_rag_test_{uuid4().hex}"
+    secret_value = "ghp_rag_report_secret_value"
+    session_local = make_session_local()
+    files: dict[str, str] = {}
+    monkeypatch.setattr(generator, "SessionLocal", session_local)
+    monkeypatch.setattr(
+        generator,
+        "create_scan_dirs",
+        lambda scan_id: {
+            "raw": MemoryPath(f"data/scans/{scan_id}/raw", files),
+            "normalized": MemoryPath(f"data/scans/{scan_id}/normalized", files),
+            "reports": MemoryPath(f"data/scans/{scan_id}/reports", files),
+        },
+    )
+
+    def fake_retrieve_context_for_finding(finding, **kwargs):
+        if finding.id == "finding_with_context":
+            return [
+                VectorSearchResult(
+                    id="chunk_1",
+                    content=(
+                        "OWASP SQL injection guidance recommends parameterized queries. "
+                        f"Do not expose {secret_value} in reports."
+                    ),
+                    metadata={
+                        "title": "OWASP SQL Injection",
+                        "source_path": "docs/owasp/sql-injection.md",
+                        "chunk_index": 2,
+                        "summary": (
+                            "Use parameterized queries for SQL injection remediation. "
+                            f"Remove exposed token {secret_value}."
+                        ),
+                    },
+                    score=0.91,
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        generator,
+        "retrieve_context_for_finding",
+        fake_retrieve_context_for_finding,
+    )
+
+    db = session_local()
+    try:
+        create_scan(
+            db,
+            scan_id=scan_id,
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+        create_finding(
+            db,
+            finding_id="finding_with_context",
+            scan_id=scan_id,
+            category="sast",
+            scanner="semgrep",
+            severity="high",
+            title="Potential SQL injection",
+            status="open",
+            cwe="CWE-89",
+        )
+        create_finding(
+            db,
+            finding_id="finding_without_context",
+            scan_id=scan_id,
+            category="cve",
+            scanner="trivy",
+            severity="medium",
+            title="Vulnerable dependency",
+            status="open",
+            component="demo-lib",
+            cve="CVE-2026-0001",
+        )
+    finally:
+        db.close()
+
+    report_path = generator.generate_markdown_report(scan_id)
+    report = report_path.read_text(encoding="utf-8")
+
+    assert "**근거 문서**" in report
+    assert "- Source: OWASP SQL Injection" in report
+    assert "- Path: docs/owasp/sql-injection.md" in report
+    assert "- Chunk: 2" in report
+    assert "- Summary: Use parameterized queries for SQL injection remediation." in report
+    assert "근거 문서 없음" in report
+    assert secret_value not in report
     assert "[REDACTED_SECRET]" in report
