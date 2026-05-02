@@ -13,10 +13,12 @@ from app.reports import generate_markdown_report, get_markdown_report_path
 from app.schemas.scan import (
     ScanCreateRequest,
     ScanCreateResponse,
+    ScanComparisonResponse,
     ScanResponse,
     ScanTaskResponse,
 )
 from app.schemas.finding import FindingResponse
+from app.services.scan_compare import compare_scans
 
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -106,6 +108,42 @@ def list_scan_findings_api(
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return list_findings_by_scan(db, scan_id)
+
+
+@router.get("/{scan_id}/compare", response_model=ScanComparisonResponse)
+def compare_scan_api(
+    scan_id: str,
+    base_scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> ScanComparisonResponse:
+    base_scan = get_scan(db, base_scan_id)
+    if base_scan is None:
+        raise HTTPException(status_code=404, detail="Base scan not found")
+
+    target_scan = get_scan(db, scan_id)
+    if target_scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        comparison = compare_scans(base_scan_id, scan_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ScanComparisonResponse(
+        base_scan_id=comparison.base_scan_id,
+        target_scan_id=comparison.target_scan_id,
+        new_findings=comparison.new_findings,
+        resolved_findings=comparison.resolved_findings,
+        persistent_findings=comparison.persistent_findings,
+        summary={
+            name: {
+                "total": stats.total,
+                "by_severity": stats.by_severity,
+                "by_category": stats.by_category,
+            }
+            for name, stats in comparison.stats.items()
+        },
+    )
 
 
 @router.post("/{scan_id}/report")

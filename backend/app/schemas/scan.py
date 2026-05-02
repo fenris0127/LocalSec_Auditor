@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.finding import FindingResponse
+
 
 ALLOWED_SCAN_TYPES = {
     "semgrep",
@@ -59,3 +61,24 @@ class ScanTaskResponse(BaseModel):
     error_message: str | None
 
     model_config = {"from_attributes": True}
+
+
+class FindingComparisonSummary(BaseModel):
+    total: int
+    by_severity: dict[str, int]
+    by_category: dict[str, int]
+
+
+class ScanComparisonSummary(BaseModel):
+    new_findings: FindingComparisonSummary
+    resolved_findings: FindingComparisonSummary
+    persistent_findings: FindingComparisonSummary
+
+
+class ScanComparisonResponse(BaseModel):
+    base_scan_id: str
+    target_scan_id: str
+    new_findings: list[FindingResponse]
+    resolved_findings: list[FindingResponse]
+    persistent_findings: list[FindingResponse]
+    summary: ScanComparisonSummary
