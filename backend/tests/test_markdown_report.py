@@ -230,3 +230,87 @@ def test_generate_markdown_report_includes_rag_reference_documents(monkeypatch):
     assert "근거 문서 없음" in report
     assert secret_value not in report
     assert "[REDACTED_SECRET]" in report
+
+
+def test_generate_markdown_report_includes_cce_configuration_section(monkeypatch):
+    scan_id = f"report_cce_test_{uuid4().hex}"
+    session_local = make_session_local()
+    files: dict[str, str] = {}
+    monkeypatch.setattr(generator, "SessionLocal", session_local)
+    monkeypatch.setattr(generator, "retrieve_context_for_finding", lambda finding, **kwargs: [])
+    monkeypatch.setattr(
+        generator,
+        "create_scan_dirs",
+        lambda scan_id: {
+            "raw": MemoryPath(f"data/scans/{scan_id}/raw", files),
+            "normalized": MemoryPath(f"data/scans/{scan_id}/normalized", files),
+            "reports": MemoryPath(f"data/scans/{scan_id}/reports", files),
+        },
+    )
+
+    db = session_local()
+    try:
+        create_scan(
+            db,
+            scan_id=scan_id,
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+        create_finding(
+            db,
+            finding_id="finding_cce",
+            scan_id=scan_id,
+            category="cce",
+            scanner="openscap",
+            severity="high",
+            title="SSH root login is enabled",
+            status="open",
+            rule_id="xccdf_org.ssgproject.content_rule_sshd_disable_root_login",
+            cce_id="CCE-80801-6",
+            current_value="PermitRootLogin yes",
+            expected_value="PermitRootLogin no",
+            raw_json_path=f"data/scans/{scan_id}/raw/openscap.xml",
+        )
+        create_finding(
+            db,
+            finding_id="finding_config",
+            scan_id=scan_id,
+            category="config",
+            scanner="lynis",
+            severity="medium",
+            title="Firewall is not enabled",
+            status="open",
+            rule_id="lynis:warning",
+            raw_json_path=f"data/scans/{scan_id}/raw/lynis.txt",
+        )
+        create_finding(
+            db,
+            finding_id="finding_sast",
+            scan_id=scan_id,
+            category="sast",
+            scanner="semgrep",
+            severity="low",
+            title="SAST finding outside CCE section",
+            status="open",
+        )
+    finally:
+        db.close()
+
+    report_path = generator.generate_markdown_report(scan_id)
+    report = report_path.read_text(encoding="utf-8")
+
+    assert "## CCE / System Configuration Findings" in report
+    assert "SSH root login is enabled" in report
+    assert "Firewall is not enabled" in report
+    assert "- Rule ID: xccdf_org.ssgproject.content_rule_sshd_disable_root_login" in report
+    assert "- CCE ID: CCE-80801-6" in report
+    assert "- Current Value: PermitRootLogin yes" in report
+    assert "- Expected Value: PermitRootLogin no" in report
+    assert "Rollback / Verification Guidance" in report
+    assert "Rollback: save the original setting value" in report
+    assert "Verification: re-run the same scanner/profile" in report
+    assert "This section is for review only. It does not change system settings." in report
+    assert "automatic remediation" not in report.lower()
+    assert "--remediate" not in report

@@ -59,6 +59,48 @@ def _render_priority_list(findings: Iterable[Finding]) -> list[str]:
     return lines
 
 
+def _is_config_finding(finding: Finding) -> bool:
+    return (finding.category or "").lower() in {"cce", "config"}
+
+
+def _render_config_findings(findings: Iterable[Finding]) -> list[str]:
+    config_findings = sorted(
+        [finding for finding in findings if _is_config_finding(finding)],
+        key=_priority_key,
+    )
+    if not config_findings:
+        return ["No CCE/config findings."]
+
+    lines = [
+        "This section is for review only. It does not change system settings.",
+        "Record the existing setting before any manual change, prepare a rollback plan, and re-run the same check to verify the result.",
+        "",
+    ]
+    for finding in config_findings:
+        lines.extend(
+            [
+                f"### {_display(finding.title)}",
+                "",
+                f"- ID: {finding.id}",
+                f"- Scanner: {_display(finding.scanner)}",
+                f"- Category: {_display(finding.category)}",
+                f"- Severity: {_display(finding.severity)}",
+                f"- Rule ID: {_display(finding.rule_id)}",
+                f"- CCE ID: {_display(getattr(finding, 'cce_id', None))}",
+                f"- Current Value: {_display(getattr(finding, 'current_value', None))}",
+                f"- Expected Value: {_display(getattr(finding, 'expected_value', None))}",
+                f"- Raw JSON: {_display(finding.raw_json_path)}",
+                "",
+                "**Rollback / Verification Guidance**",
+                "",
+                "- Rollback: save the original setting value and the file or command source before a reviewed manual change.",
+                "- Verification: re-run the same scanner/profile after the manual change and confirm the finding is resolved.",
+                "",
+            ]
+        )
+    return lines
+
+
 def _summarize_chunk_text(content: object, max_length: int = 240) -> str:
     text = " ".join(mask_secret_text(content).split())
     if not text:
@@ -159,6 +201,10 @@ def _render_report(
         "## Priority List",
         "",
         *_render_priority_list(findings),
+        "",
+        "## CCE / System Configuration Findings",
+        "",
+        *_render_config_findings(findings),
         "",
         "## Finding Details",
         "",
