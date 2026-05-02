@@ -37,6 +37,7 @@ class ScanCreateResponse(BaseModel):
 
 class ScanResponse(BaseModel):
     id: str
+    project_id: str | None = None
     project_name: str
     target_path: str
     status: str

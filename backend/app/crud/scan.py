@@ -13,12 +13,14 @@ def create_scan(
     project_name: str,
     target_path: str,
     status: str,
+    project_id: str | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     created_at: datetime | None = None,
 ) -> Scan:
     scan = Scan(
         id=scan_id,
+        project_id=project_id,
         project_name=project_name,
         target_path=target_path,
         status=status,
