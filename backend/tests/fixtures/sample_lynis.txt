@@ -1,0 +1,4 @@
+[WARNING] SSH root login is permitted
+[SUGGESTION] Configure a password aging policy
+warning[]=Firewall is not enabled
+suggestion[]=Install security updates automatically
