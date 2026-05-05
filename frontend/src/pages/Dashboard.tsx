@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 
-import { listScans } from "../api/scans";
-import type { ScanSummary } from "../api/scans";
+import { getDashboardSummary } from "../api/dashboard";
+import type { DashboardSummary } from "../api/dashboard";
 import { getToolsStatus } from "../api/tools";
 import type { ToolName, ToolsStatusResponse } from "../api/tools";
 
@@ -13,6 +13,15 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function severityEntries(summary: DashboardSummary | null): [string, number][] {
+  if (!summary) {
+    return [];
+  }
+  return Object.entries(summary.severity_counts).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
 }
 
 function ToolsStatus(): ReactElement {
@@ -101,24 +110,24 @@ function ToolsStatus(): ReactElement {
 }
 
 export function Dashboard(): ReactElement {
-  const [scans, setScans] = useState<ScanSummary[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadScans(): Promise<void> {
+    async function loadSummary(): Promise<void> {
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const result = await listScans();
+        const result = await getDashboardSummary();
         if (isMounted) {
-          setScans(result);
+          setSummary(result);
         }
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error instanceof Error ? error.message : "Could not load scans");
+          setErrorMessage(error instanceof Error ? error.message : "Could not load dashboard summary");
         }
       } finally {
         if (isMounted) {
@@ -127,7 +136,7 @@ export function Dashboard(): ReactElement {
       }
     }
 
-    void loadScans();
+    void loadSummary();
 
     return () => {
       isMounted = false;
@@ -142,59 +151,121 @@ export function Dashboard(): ReactElement {
         <p className="section-copy">Review created scans and open a scan to inspect tasks and findings.</p>
       </div>
 
+      <div className="summary-panel dashboard-summary-panel">
+        <h2>Risk trend summary</h2>
+
+        {isLoading ? (
+          <div className="empty-panel compact" role="status">
+            <strong>Loading summary</strong>
+            <span>Fetching recent scans and finding counts.</span>
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="status-message error" role="alert">
+            <strong>Could not load dashboard summary</strong>
+            <span>{errorMessage}</span>
+          </div>
+        ) : null}
+
+        {!isLoading && !errorMessage && summary ? (
+          <>
+            <div className="severity-card-grid">
+              {severityEntries(summary).length > 0 ? (
+                severityEntries(summary).map(([severity, count]) => (
+                  <div className="severity-card" key={severity}>
+                    <strong>{severity}</strong>
+                    <span>{count}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">No findings counted yet.</p>
+              )}
+            </div>
+
+            <div className="dashboard-grid">
+              <div className="dashboard-subsection">
+                <h3>Recent scans</h3>
+                {summary.recent_scans.length > 0 ? (
+                  <div className="table-panel compact">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Scan ID</th>
+                          <th>Project</th>
+                          <th>Status</th>
+                          <th>Findings</th>
+                          <th>Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.recent_scans.map((scan) => (
+                          <tr key={scan.id}>
+                            <td>
+                              <a className="table-link" href={`#/scans/${encodeURIComponent(scan.id)}`}>
+                                {scan.id}
+                              </a>
+                            </td>
+                            <td>{scan.project_name}</td>
+                            <td>
+                              <span className="status-pill">{scan.status}</span>
+                            </td>
+                            <td>{scan.finding_count}</td>
+                            <td>{formatDate(scan.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted">No recent scans.</p>
+                )}
+              </div>
+
+              <div className="dashboard-subsection">
+                <h3>Project latest status</h3>
+                {summary.project_latest_scans.length > 0 ? (
+                  <div className="table-panel compact">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Project</th>
+                          <th>Latest scan</th>
+                          <th>Status</th>
+                          <th>Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.project_latest_scans.map((project) => (
+                          <tr key={project.project_id ?? project.project_name}>
+                            <td>{project.project_name}</td>
+                            <td>
+                              <a
+                                className="table-link"
+                                href={`#/scans/${encodeURIComponent(project.latest_scan_id)}`}
+                              >
+                                {project.latest_scan_id}
+                              </a>
+                            </td>
+                            <td>
+                              <span className="status-pill">{project.latest_scan_status}</span>
+                            </td>
+                            <td>{formatDate(project.latest_scan_created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted">No project status available.</p>
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+
       <ToolsStatus />
-
-      {isLoading ? (
-        <div className="empty-panel" role="status">
-          <strong>Loading scans</strong>
-          <span>Fetching scan history from the backend.</span>
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="status-message error" role="alert">
-          <strong>Could not load scans</strong>
-          <span>{errorMessage}</span>
-        </div>
-      ) : null}
-
-      {!isLoading && !errorMessage && scans.length === 0 ? (
-        <div className="empty-panel">
-          <strong>No scans yet</strong>
-          <span>Create a scan from the New Scan page.</span>
-        </div>
-      ) : null}
-
-      {!isLoading && !errorMessage && scans.length > 0 ? (
-        <div className="table-panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Scan ID</th>
-                <th>Project</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.map((scan) => (
-                <tr key={scan.id}>
-                  <td>
-                    <a className="table-link" href={`#/scans/${encodeURIComponent(scan.id)}`}>
-                      {scan.id}
-                    </a>
-                  </td>
-                  <td>{scan.project_name}</td>
-                  <td>
-                    <span className="status-pill">{scan.status}</span>
-                  </td>
-                  <td>{formatDate(scan.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </section>
   );
 }
