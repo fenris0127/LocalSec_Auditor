@@ -25,6 +25,11 @@ SEVERITY_ORDER = {
     "info": 4,
 }
 
+
+class ReportExportError(RuntimeError):
+    """Raised when a report export backend cannot produce the requested file."""
+
+
 def _display(value: object) -> str:
     if value is None:
         return "N/A"
@@ -235,6 +240,10 @@ def get_html_report_path(scan_id: str) -> Path:
     return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "report.html"
 
 
+def get_pdf_report_path(scan_id: str) -> Path:
+    return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "report.pdf"
+
+
 def _render_inline_markdown(value: str) -> str:
     text = escape(mask_secret_text(value))
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
@@ -348,4 +357,28 @@ def generate_html_report(scan_id: str) -> Path:
     paths = create_scan_dirs(scan_id)
     report_path = paths["reports"] / "report.html"
     report_path.write_text(html, encoding="utf-8")
+    return report_path
+
+
+def _convert_html_to_pdf(html: str, output_path: Path) -> None:
+    try:
+        from weasyprint import HTML
+    except ImportError as exc:
+        raise ReportExportError(
+            "PDF export requires an HTML-to-PDF backend. Install WeasyPrint to enable PDF reports."
+        ) from exc
+
+    try:
+        HTML(string=html).write_pdf(str(output_path))
+    except Exception as exc:
+        raise ReportExportError(f"PDF export failed: {exc}") from exc
+
+
+def generate_pdf_report(scan_id: str) -> Path:
+    html_path = generate_html_report(scan_id)
+    html = mask_secret_text(html_path.read_text(encoding="utf-8"))
+
+    paths = create_scan_dirs(scan_id)
+    report_path = paths["reports"] / "report.pdf"
+    _convert_html_to_pdf(html, report_path)
     return report_path
