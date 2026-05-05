@@ -9,6 +9,7 @@ from app.schemas.scan import (
 )
 from app.schemas.finding import FindingCreate, FindingResponse
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.workflow import WorkflowTaskCreate, WorkflowTaskResponse
 
 
 __all__ = [
@@ -24,4 +25,6 @@ __all__ = [
     "ScanTaskResponse",
     "FindingCreate",
     "FindingResponse",
+    "WorkflowTaskCreate",
+    "WorkflowTaskResponse",
 ]
