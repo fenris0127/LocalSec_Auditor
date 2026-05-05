@@ -61,3 +61,37 @@ def update_task_status(
 def list_tasks_by_scan(db: Session, scan_id: str) -> list[ScanTask]:
     statement = select(ScanTask).where(ScanTask.scan_id == scan_id).order_by(ScanTask.id)
     return list(db.scalars(statement))
+
+
+def get_scan_task_progress(db: Session, scan_id: str) -> dict[str, object]:
+    tasks = list_tasks_by_scan(db, scan_id)
+    total_tasks = len(tasks)
+
+    completed_tasks = sum(1 for task in tasks if task.status == "completed")
+    failed_tasks = sum(1 for task in tasks if task.status == "failed")
+    running_tasks = sum(1 for task in tasks if task.status == "running")
+    pending_tasks = sum(1 for task in tasks if task.status in {"pending", "queued", "ready"})
+    cancelled_tasks = sum(1 for task in tasks if task.status == "cancelled")
+    finished_tasks = completed_tasks + failed_tasks + cancelled_tasks
+    progress_percent = round((finished_tasks / total_tasks) * 100, 2) if total_tasks else 0.0
+
+    running_task = next((task for task in tasks if task.status == "running"), None)
+    current_task = None
+    if running_task is not None:
+        current_task = {
+            "id": running_task.id,
+            "task_type": running_task.task_type,
+            "tool_name": running_task.tool_name,
+            "status": running_task.status,
+        }
+
+    return {
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "failed_tasks": failed_tasks,
+        "running_tasks": running_tasks,
+        "pending_tasks": pending_tasks,
+        "cancelled_tasks": cancelled_tasks,
+        "progress_percent": progress_percent,
+        "current_task": current_task,
+    }

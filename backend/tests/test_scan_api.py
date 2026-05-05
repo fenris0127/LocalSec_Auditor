@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.crud.scan import get_scan
-from app.crud.task import list_tasks_by_scan
+from app.crud.task import list_tasks_by_scan, update_task_status
 from app.db.base import Base
 from app.db.database import get_db_session
 from app.main import app
@@ -392,6 +392,66 @@ def test_scan_query_apis_return_scan_and_tasks(tmp_path):
         app.dependency_overrides.clear()
 
 
+def test_scan_progress_api_returns_task_counts_and_current_task(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                    FakeUuid("0002"),
+                    FakeUuid("0003"),
+                    FakeUuid("0004"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["semgrep", "gitleaks", "trivy", "lynis"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        db = session_local()
+        try:
+            update_task_status(db, task_id="task_0001", status="completed")
+            update_task_status(db, task_id="task_0002", status="failed", error_message="scanner failed")
+            update_task_status(db, task_id="task_0003", status="running")
+        finally:
+            db.close()
+
+        progress_response = client.get(f"/api/scans/{scan_id}/progress")
+
+        assert progress_response.status_code == 200
+        assert progress_response.json() == {
+            "total_tasks": 4,
+            "completed_tasks": 1,
+            "failed_tasks": 1,
+            "running_tasks": 1,
+            "pending_tasks": 1,
+            "cancelled_tasks": 0,
+            "progress_percent": 50.0,
+            "current_task": {
+                "id": "task_0003",
+                "task_type": "scanner",
+                "tool_name": "gitleaks",
+                "status": "running",
+            },
+        }
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
     db_path = tmp_path / "missing_api.db"
     engine = create_engine(
@@ -413,9 +473,11 @@ def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
     try:
         detail_response = client.get("/api/scans/missing")
         tasks_response = client.get("/api/scans/missing/tasks")
+        progress_response = client.get("/api/scans/missing/progress")
 
         assert detail_response.status_code == 404
         assert tasks_response.status_code == 404
+        assert progress_response.status_code == 404
     finally:
         app.dependency_overrides.clear()
 

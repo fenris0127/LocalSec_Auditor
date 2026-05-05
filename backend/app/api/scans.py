@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.crud.finding import list_findings_by_scan
 from app.crud.scan import create_scan, get_scan, list_scans
-from app.crud.task import create_task, list_tasks_by_scan
+from app.crud.task import create_task, get_scan_task_progress, list_tasks_by_scan
 from app.core.workspace import get_workspace_root, is_path_inside_workspace
 from app.db.database import get_db_session
 from app.orchestrator.hermes import run_scan
@@ -97,6 +97,17 @@ def list_scan_tasks_api(
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return list_tasks_by_scan(db, scan_id)
+
+
+@router.get("/{scan_id}/progress")
+def get_scan_progress_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return get_scan_task_progress(db, scan_id)
 
 
 @router.get("/{scan_id}/findings", response_model=list[FindingResponse])
