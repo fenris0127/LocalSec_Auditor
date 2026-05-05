@@ -164,6 +164,8 @@ def run_scan(scan_id: str) -> None:
         scan = get_scan(db, scan_id)
         if scan is None:
             raise ValueError(f"Scan not found: {scan_id}")
+        if scan.status == "cancelled":
+            return
 
         started_at = datetime.utcnow()
         update_scan_status(db, scan_id=scan_id, status="running", started_at=started_at)

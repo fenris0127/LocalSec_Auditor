@@ -505,6 +505,122 @@ def test_rerun_scan_task_api_runs_specific_task(tmp_path):
         app.dependency_overrides.clear()
 
 
+def test_cancel_scan_api_cancels_queued_tasks_and_keeps_running_task(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                    FakeUuid("0002"),
+                    FakeUuid("0003"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["semgrep", "gitleaks", "trivy"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        db = session_local()
+        try:
+            update_task_status(db, task_id="task_0001", status="completed")
+            update_task_status(db, task_id="task_0002", status="running")
+        finally:
+            db.close()
+
+        cancel_response = client.post(f"/api/scans/{scan_id}/cancel")
+
+        assert cancel_response.status_code == 200
+        assert cancel_response.json() == {
+            "scan_id": scan_id,
+            "scan_status": "cancelling",
+            "cancelled_tasks": 1,
+            "running_tasks": 1,
+        }
+
+        db = session_local()
+        try:
+            scan = get_scan(db, scan_id)
+            tasks = list_tasks_by_scan(db, scan_id)
+        finally:
+            db.close()
+
+        assert scan is not None
+        assert scan.status == "cancelling"
+        assert {task.id: task.status for task in tasks} == {
+            "task_0001": "completed",
+            "task_0002": "running",
+            "task_0003": "cancelled",
+        }
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_cancel_scan_api_marks_scan_cancelled_when_no_task_is_running(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                    FakeUuid("0002"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["semgrep", "gitleaks"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        cancel_response = client.post(f"/api/scans/{scan_id}/cancel")
+
+        assert cancel_response.status_code == 200
+        assert cancel_response.json() == {
+            "scan_id": scan_id,
+            "scan_status": "cancelled",
+            "cancelled_tasks": 2,
+            "running_tasks": 0,
+        }
+
+        db = session_local()
+        try:
+            scan = get_scan(db, scan_id)
+            tasks = list_tasks_by_scan(db, scan_id)
+        finally:
+            db.close()
+
+        assert scan is not None
+        assert scan.status == "cancelled"
+        assert {task.status for task in tasks} == {"cancelled"}
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
     db_path = tmp_path / "missing_api.db"
     engine = create_engine(
@@ -528,11 +644,13 @@ def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
         tasks_response = client.get("/api/scans/missing/tasks")
         progress_response = client.get("/api/scans/missing/progress")
         rerun_response = client.post("/api/scans/missing/tasks/missing_task/rerun")
+        cancel_response = client.post("/api/scans/missing/cancel")
 
         assert detail_response.status_code == 404
         assert tasks_response.status_code == 404
         assert progress_response.status_code == 404
         assert rerun_response.status_code == 404
+        assert cancel_response.status_code == 404
     finally:
         app.dependency_overrides.clear()
 

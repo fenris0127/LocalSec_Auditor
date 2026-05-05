@@ -9,6 +9,7 @@ from app.crud.task import create_task, get_scan_task_progress, get_task, list_ta
 from app.core.workspace import get_workspace_root, is_path_inside_workspace
 from app.db.database import get_db_session
 from app.orchestrator.hermes import rerun_scan_task, run_scan
+from app.orchestrator.task_cancellation import cancel_scan
 from app.reports import generate_markdown_report, get_markdown_report_path
 from app.schemas.scan import (
     ScanCreateRequest,
@@ -86,6 +87,28 @@ def get_scan_api(
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return scan
+
+
+@router.post("/{scan_id}/cancel")
+def cancel_scan_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        result = cancel_scan(scan_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {
+        "scan_id": result.scan_id,
+        "scan_status": result.scan_status,
+        "cancelled_tasks": result.cancelled_tasks,
+        "running_tasks": result.running_tasks,
+    }
 
 
 @router.get("/{scan_id}/tasks", response_model=list[ScanTaskResponse])
