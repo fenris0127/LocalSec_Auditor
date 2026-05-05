@@ -627,6 +627,80 @@ tbody tr:last-child td {
   gap: 12px;
 }
 
+.progress-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-header strong {
+  color: #17202a;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.progress-header span {
+  color: #5f6f80;
+  font-size: 14px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef4;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1e6f5c;
+  transition: width 160ms ease;
+}
+
+.progress-count-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.current-task-panel,
+.failed-task-list {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 14px;
+}
+
+.current-task-panel p,
+.failed-task-item p {
+  margin: 0;
+  color: #405266;
+  overflow-wrap: anywhere;
+}
+
+.failed-task-list {
+  border-color: #edc2c2;
+  background: #fff8f8;
+}
+
+.failed-task-item {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #f0d0d0;
+  padding-top: 8px;
+}
+
+.failed-task-item span {
+  color: #8a2d2d;
+  font-weight: 700;
+}
+
 .comparison-results {
   display: grid;
   gap: 16px;

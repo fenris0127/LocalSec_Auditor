@@ -6,6 +6,7 @@ import {
   compareScanWithLatest,
   createScanReport,
   getScan,
+  getScanProgress,
   getScanReport,
   listScanFindings,
   listScanTasks,
@@ -16,6 +17,7 @@ import type {
   FindingComparisonSummary,
   ReferenceContext,
   ScanComparisonResponse,
+  ScanProgressResponse,
   ScanSummary,
   ScanTask,
 } from "../api/scans";
@@ -103,8 +105,100 @@ function isConfigFinding(finding: Finding): boolean {
   return category === "cce" || category === "config";
 }
 
+function isTerminalScanStatus(status: string): boolean {
+  return ["completed", "failed", "cancelled"].includes(status.toLowerCase());
+}
+
 function sortedSummaryEntries(values: Record<string, number>): [string, number][] {
   return Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function ScanProgressPanel({
+  progress,
+  tasks,
+  isLoading,
+  error,
+}: {
+  progress: ScanProgressResponse | null;
+  tasks: ScanTask[];
+  isLoading: boolean;
+  error: string | null;
+}): ReactElement {
+  const failedTasks = tasks.filter((task) => task.status === "failed");
+  const percent = progress ? Math.min(100, Math.max(0, progress.progress_percent)) : 0;
+
+  return (
+    <div className="summary-panel">
+      <div className="panel-heading-row">
+        <h2>Progress</h2>
+        {isLoading ? <span className="muted">Updating</span> : null}
+      </div>
+
+      {error ? (
+        <div className="status-message error" role="alert">
+          <strong>Could not load progress</strong>
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      {progress ? (
+        <>
+          <div className="progress-header">
+            <strong>{percent}%</strong>
+            <span>
+              {progress.completed_tasks + progress.failed_tasks + progress.cancelled_tasks} /{" "}
+              {progress.total_tasks} tasks finished
+            </span>
+          </div>
+          <div
+            aria-label={`Scan progress ${percent}%`}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={percent}
+            className="progress-track"
+            role="progressbar"
+          >
+            <span style={{ width: `${percent}%` }} />
+          </div>
+
+          <div className="progress-count-grid">
+            <span className="status-pill">pending: {progress.pending_tasks}</span>
+            <span className="status-pill">running: {progress.running_tasks}</span>
+            <span className="status-pill success">completed: {progress.completed_tasks}</span>
+            <span className="status-pill warning">failed: {progress.failed_tasks}</span>
+            <span className="status-pill">cancelled: {progress.cancelled_tasks}</span>
+          </div>
+
+          <div className="current-task-panel">
+            <strong>Current task</strong>
+            {progress.current_task ? (
+              <p>
+                {display(progress.current_task.tool_name)} / {progress.current_task.status}
+              </p>
+            ) : (
+              <p className="muted">No task is currently running.</p>
+            )}
+          </div>
+
+          {failedTasks.length > 0 ? (
+            <div className="failed-task-list">
+              <strong>Failed tasks</strong>
+              {failedTasks.map((task) => (
+                <div className="failed-task-item" key={task.id}>
+                  <span>
+                    {display(task.tool_name)} / {task.status}
+                  </span>
+                  <p>{display(task.error_message)}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="muted">No progress data loaded.</p>
+      )}
+    </div>
+  );
 }
 
 function ComparisonSummaryBlock({
@@ -284,9 +378,12 @@ function ReferenceDocuments({ contexts }: { contexts: ReferenceContext[] }): Rea
 export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
   const [scan, setScan] = useState<ScanSummary | null>(null);
   const [tasks, setTasks] = useState<ScanTask[]>([]);
+  const [progress, setProgress] = useState<ScanProgressResponse | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [isProgressLoading, setIsProgressLoading] = useState(false);
   const [findingsError, setFindingsError] = useState<string | null>(null);
   const [analyzingFindingIds, setAnalyzingFindingIds] = useState<Record<string, boolean>>({});
   const [analysisErrors, setAnalysisErrors] = useState<Record<string, string>>({});
@@ -317,13 +414,20 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
       setComparisonNotice(null);
       setScan(null);
       setTasks([]);
+      setProgress(null);
+      setProgressError(null);
       setFindings([]);
 
       try {
-        const [scanResult, taskResult] = await Promise.all([getScan(id), listScanTasks(id)]);
+        const [scanResult, taskResult, progressResult] = await Promise.all([
+          getScan(id),
+          listScanTasks(id),
+          getScanProgress(id),
+        ]);
         if (isMounted) {
           setScan(scanResult);
           setTasks(taskResult);
+          setProgress(progressResult);
         }
       } catch (error) {
         if (isMounted) {
@@ -356,6 +460,48 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
       isMounted = false;
     };
   }, [scanId]);
+
+  useEffect(() => {
+    if (!scanId || !scan || isTerminalScanStatus(scan.status)) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function refreshProgress(id: string): Promise<void> {
+      setIsProgressLoading(true);
+      try {
+        const [scanResult, taskResult, progressResult] = await Promise.all([
+          getScan(id),
+          listScanTasks(id),
+          getScanProgress(id),
+        ]);
+        if (isMounted) {
+          setScan(scanResult);
+          setTasks(taskResult);
+          setProgress(progressResult);
+          setProgressError(null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setProgressError(error instanceof Error ? error.message : "Could not load scan progress");
+        }
+      } finally {
+        if (isMounted) {
+          setIsProgressLoading(false);
+        }
+      }
+    }
+
+    const timerId = window.setInterval(() => {
+      void refreshProgress(scanId);
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timerId);
+    };
+  }, [scanId, scan?.status]);
 
   async function handleAnalyzeFinding(findingId: string): Promise<void> {
     setAnalyzingFindingIds((current) => ({ ...current, [findingId]: true }));
@@ -538,6 +684,15 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
             )}
           </div>
         </div>
+      ) : null}
+
+      {scan ? (
+        <ScanProgressPanel
+          error={progressError}
+          isLoading={isProgressLoading}
+          progress={progress}
+          tasks={tasks}
+        />
       ) : null}
 
       {scan ? (

@@ -36,6 +36,24 @@ export interface ScanTask {
   error_message: string | null;
 }
 
+export interface ScanProgressCurrentTask {
+  id: string;
+  task_type: string;
+  tool_name: string | null;
+  status: string;
+}
+
+export interface ScanProgressResponse {
+  total_tasks: number;
+  completed_tasks: number;
+  failed_tasks: number;
+  running_tasks: number;
+  pending_tasks: number;
+  cancelled_tasks: number;
+  progress_percent: number;
+  current_task: ScanProgressCurrentTask | null;
+}
+
 export interface Finding {
   id: string;
   scan_id: string;
@@ -173,6 +191,13 @@ export function listScanTasks(scanId: string): Promise<ScanTask[]> {
   return requestJson<ScanTask[]>(
     `/api/scans/${encodeURIComponent(scanId)}/tasks`,
     "Could not load scan tasks",
+  );
+}
+
+export function getScanProgress(scanId: string): Promise<ScanProgressResponse> {
+  return requestJson<ScanProgressResponse>(
+    `/api/scans/${encodeURIComponent(scanId)}/progress`,
+    "Could not load scan progress",
   );
 }
 
