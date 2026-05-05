@@ -29,6 +29,7 @@ def _find_duplicate_cve_finding(
 
     conditions = [
         Finding.scan_id == scan_id,
+        Finding.status != "superseded",
         func.lower(Finding.category) == dedup_key.category,
         func.upper(Finding.cve) == dedup_key.cve,
         func.lower(Finding.component) == dedup_key.component,
@@ -117,6 +118,24 @@ def create_finding(
 def list_findings_by_scan(db: Session, scan_id: str) -> list[Finding]:
     statement = select(Finding).where(Finding.scan_id == scan_id).order_by(Finding.id)
     return list(db.scalars(statement))
+
+
+def mark_findings_superseded_by_scanner(
+    db: Session,
+    *,
+    scan_id: str,
+    scanner: str,
+) -> int:
+    statement = select(Finding).where(
+        Finding.scan_id == scan_id,
+        Finding.scanner == scanner,
+        Finding.status != "superseded",
+    )
+    findings = list(db.scalars(statement))
+    for finding in findings:
+        finding.status = "superseded"
+    db.commit()
+    return len(findings)
 
 
 def get_finding(db: Session, finding_id: str) -> Finding | None:

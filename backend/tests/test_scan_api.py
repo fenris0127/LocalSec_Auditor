@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -452,6 +453,58 @@ def test_scan_progress_api_returns_task_counts_and_current_task(tmp_path):
         app.dependency_overrides.clear()
 
 
+def test_rerun_scan_task_api_runs_specific_task(tmp_path):
+    client, session_local = make_test_client(tmp_path)
+    try:
+        with (
+            patch(
+                "app.api.scans.uuid4",
+                side_effect=[
+                    FakeUuid("0000"),
+                    FakeUuid("0001"),
+                ],
+            ),
+            patch("app.api.scans.run_scan"),
+        ):
+            response = client.post(
+                "/api/scans",
+                json={
+                    "project_name": "demo",
+                    "target_path": "C:/AI/projects/demo",
+                    "scan_types": ["semgrep"],
+                    "llm_enabled": True,
+                    "run_immediately": False,
+                },
+            )
+
+        assert response.status_code == 200
+        scan_id = response.json()["scan_id"]
+
+        with patch(
+            "app.api.scans.rerun_scan_task",
+            return_value=SimpleNamespace(
+                scan_id=scan_id,
+                task_id="task_0001",
+                task_status="completed",
+                superseded_findings=1,
+                new_findings=4,
+            ),
+        ) as rerun_mock:
+            rerun_response = client.post(f"/api/scans/{scan_id}/tasks/task_0001/rerun")
+
+        assert rerun_response.status_code == 200
+        assert rerun_response.json() == {
+            "scan_id": scan_id,
+            "task_id": "task_0001",
+            "task_status": "completed",
+            "superseded_findings": 1,
+            "new_findings": 4,
+        }
+        rerun_mock.assert_called_once()
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
     db_path = tmp_path / "missing_api.db"
     engine = create_engine(
@@ -474,10 +527,12 @@ def test_scan_query_apis_return_404_for_missing_scan(tmp_path):
         detail_response = client.get("/api/scans/missing")
         tasks_response = client.get("/api/scans/missing/tasks")
         progress_response = client.get("/api/scans/missing/progress")
+        rerun_response = client.post("/api/scans/missing/tasks/missing_task/rerun")
 
         assert detail_response.status_code == 404
         assert tasks_response.status_code == 404
         assert progress_response.status_code == 404
+        assert rerun_response.status_code == 404
     finally:
         app.dependency_overrides.clear()
 

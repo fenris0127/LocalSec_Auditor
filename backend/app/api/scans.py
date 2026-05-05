@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.crud.finding import list_findings_by_scan
 from app.crud.scan import create_scan, get_scan, list_scans
-from app.crud.task import create_task, get_scan_task_progress, list_tasks_by_scan
+from app.crud.task import create_task, get_scan_task_progress, get_task, list_tasks_by_scan
 from app.core.workspace import get_workspace_root, is_path_inside_workspace
 from app.db.database import get_db_session
-from app.orchestrator.hermes import run_scan
+from app.orchestrator.hermes import rerun_scan_task, run_scan
 from app.reports import generate_markdown_report, get_markdown_report_path
 from app.schemas.scan import (
     ScanCreateRequest,
@@ -97,6 +97,34 @@ def list_scan_tasks_api(
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return list_tasks_by_scan(db, scan_id)
+
+
+@router.post("/{scan_id}/tasks/{task_id}/rerun")
+def rerun_scan_task_api(
+    scan_id: str,
+    task_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    task = get_task(db, task_id)
+    if task is None or task.scan_id != scan_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    try:
+        result = rerun_scan_task(scan_id, task_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {
+        "scan_id": result.scan_id,
+        "task_id": result.task_id,
+        "task_status": result.task_status,
+        "superseded_findings": result.superseded_findings,
+        "new_findings": result.new_findings,
+    }
 
 
 @router.get("/{scan_id}/progress")

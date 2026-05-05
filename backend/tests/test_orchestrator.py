@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.crud.finding import list_findings_by_scan
+from app.crud.finding import create_finding, list_findings_by_scan
 from app.crud.scan import create_scan, get_scan
 from app.crud.task import create_task, list_tasks_by_scan
 from app.db.base import Base
@@ -197,3 +197,70 @@ def test_run_scan_marks_failed_task_and_scan_failed(monkeypatch, tmp_path):
     assert status_by_tool == {"semgrep": "completed", "gitleaks": "failed", "trivy": "completed"}
     assert error_by_tool["gitleaks"] == "gitleaks failed"
     assert Counter(finding.scanner for finding in findings) == Counter({"semgrep": 4, "trivy": 2})
+
+
+def test_rerun_scan_task_supersedes_existing_findings_and_persists_new_results(monkeypatch, tmp_path):
+    session_local = _configure_session(monkeypatch, tmp_path)
+    db = session_local()
+    try:
+        scan = create_scan(
+            db,
+            scan_id="scan_rerun",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+        )
+        create_task(
+            db,
+            task_id="task_semgrep",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="semgrep",
+            status="completed",
+        )
+        create_finding(
+            db,
+            finding_id="finding_old_semgrep",
+            scan_id=scan.id,
+            category="sast",
+            scanner="semgrep",
+            severity="high",
+            title="Old semgrep finding",
+            status="open",
+        )
+    finally:
+        db.close()
+
+    raw_dir = tmp_path / "data" / "scans" / "scan_rerun" / "raw"
+    raw_dir.mkdir(parents=True)
+    raw_path = raw_dir / "semgrep.json"
+    raw_path.write_text('{"results":[]}', encoding="utf-8")
+
+    semgrep_json = (Path(__file__).parent / "fixtures" / "sample_semgrep.json").read_text(encoding="utf-8")
+    monkeypatch.setattr(
+        hermes,
+        "run_semgrep",
+        lambda target_path, output_path, timeout=None: CommandResult(
+            stdout=semgrep_json,
+            stderr="",
+            exit_code=0,
+        ),
+    )
+
+    db = session_local()
+    try:
+        result = hermes.rerun_scan_task("scan_rerun", "task_semgrep", db=db)
+        tasks = list_tasks_by_scan(db, "scan_rerun")
+        findings = list_findings_by_scan(db, "scan_rerun")
+    finally:
+        db.close()
+
+    status_by_title = {finding.title: finding.status for finding in findings}
+
+    assert result.task_status == "completed"
+    assert result.superseded_findings == 1
+    assert result.new_findings == 4
+    assert {task.status for task in tasks} == {"completed"}
+    assert raw_path.read_text(encoding="utf-8") == semgrep_json
+    assert status_by_title["Old semgrep finding"] == "superseded"
+    assert Counter(finding.status for finding in findings) == Counter({"open": 4, "superseded": 1})

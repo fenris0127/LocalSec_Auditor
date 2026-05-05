@@ -2,11 +2,12 @@ from app.crud.finding import (
     create_finding,
     get_finding,
     list_findings_by_scan,
+    mark_findings_superseded_by_scanner,
     update_finding_llm_summary,
 )
 from app.crud.project import create_project, get_project, list_projects, update_project
 from app.crud.scan import create_scan, get_scan, list_scans, update_scan_status
-from app.crud.task import create_task, list_tasks_by_scan, update_task_status
+from app.crud.task import create_task, get_task, list_tasks_by_scan, update_task_status
 from app.crud.workflow_task import (
     create_workflow_task,
     get_workflow_task,
@@ -25,6 +26,7 @@ __all__ = [
     "get_finding",
     "get_project",
     "get_scan",
+    "get_task",
     "get_workflow_task",
     "get_workflow_task_dependencies",
     "list_findings_by_scan",
@@ -32,6 +34,7 @@ __all__ = [
     "list_scans",
     "list_tasks_by_scan",
     "list_workflow_tasks_by_scan",
+    "mark_findings_superseded_by_scanner",
     "update_finding_llm_summary",
     "update_project",
     "update_scan_status",

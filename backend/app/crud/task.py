@@ -58,6 +58,10 @@ def update_task_status(
     return task
 
 
+def get_task(db: Session, task_id: str) -> ScanTask | None:
+    return db.get(ScanTask, task_id)
+
+
 def list_tasks_by_scan(db: Session, scan_id: str) -> list[ScanTask]:
     statement = select(ScanTask).where(ScanTask.scan_id == scan_id).order_by(ScanTask.id)
     return list(db.scalars(statement))

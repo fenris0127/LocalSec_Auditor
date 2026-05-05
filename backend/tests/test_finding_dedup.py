@@ -109,3 +109,46 @@ def test_create_finding_keeps_same_cve_for_different_component_separate(tmp_path
         assert {finding.component for finding in findings} == {"lodash", "express"}
     finally:
         db.close()
+
+
+def test_create_finding_does_not_deduplicate_superseded_cve(tmp_path):
+    db = make_session(tmp_path)
+    try:
+        scan = create_test_scan(db)
+
+        create_finding(
+            db,
+            finding_id="finding_old",
+            scan_id=scan.id,
+            category="cve",
+            scanner="trivy",
+            severity="high",
+            title="CVE-2026-1000 in lodash",
+            status="superseded",
+            component="lodash",
+            installed_version="4.17.20",
+            fixed_version="4.17.21",
+            cve="CVE-2026-1000",
+        )
+        new_finding = create_finding(
+            db,
+            finding_id="finding_new",
+            scan_id=scan.id,
+            category="cve",
+            scanner="trivy",
+            severity="high",
+            title="CVE-2026-1000 in lodash",
+            status="open",
+            component="lodash",
+            installed_version="4.17.20",
+            fixed_version="4.17.21",
+            cve="CVE-2026-1000",
+        )
+
+        findings = list_findings_by_scan(db, scan.id)
+
+        assert new_finding.id == "finding_new"
+        assert len(findings) == 2
+        assert {finding.status for finding in findings} == {"open", "superseded"}
+    finally:
+        db.close()
