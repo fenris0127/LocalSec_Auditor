@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections import Counter
+from html import escape
 from pathlib import Path
+import re
 from typing import Iterable
 
 from app.crud.finding import list_findings_by_scan
@@ -22,7 +24,6 @@ SEVERITY_ORDER = {
     "low": 3,
     "info": 4,
 }
-
 
 def _display(value: object) -> str:
     if value is None:
@@ -230,6 +231,95 @@ def get_markdown_report_path(scan_id: str) -> Path:
     return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "report.md"
 
 
+def get_html_report_path(scan_id: str) -> Path:
+    return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "report.html"
+
+
+def _render_inline_markdown(value: str) -> str:
+    text = escape(mask_secret_text(value))
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+
+
+def _severity_class_for_line(line: str) -> str:
+    lower = line.lower()
+    match = re.search(r"\[(critical|high|medium|low|info)\]", lower)
+    if match:
+        return f" severity severity-{match.group(1)}"
+
+    match = re.search(r"severity:\s*(critical|high|medium|low|info)", lower)
+    if match:
+        return f" severity severity-{match.group(1)}"
+
+    return ""
+
+
+def _markdown_to_html(markdown: str) -> str:
+    body: list[str] = []
+    in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            body.append("</ul>")
+            in_list = False
+
+    for raw_line in markdown.splitlines():
+        line = mask_secret_text(raw_line).rstrip()
+        if not line:
+            close_list()
+            continue
+
+        if line.startswith("#"):
+            close_list()
+            heading_level = min(len(line) - len(line.lstrip("#")), 6)
+            heading_text = line[heading_level:].strip()
+            body.append(f"<h{heading_level}>{_render_inline_markdown(heading_text)}</h{heading_level}>")
+            continue
+
+        if line.startswith("- "):
+            if not in_list:
+                body.append("<ul>")
+                in_list = True
+            class_name = _severity_class_for_line(line)
+            class_attr = f' class="{class_name.strip()}"' if class_name else ""
+            body.append(f"<li{class_attr}>{_render_inline_markdown(line[2:].strip())}</li>")
+            continue
+
+        close_list()
+        body.append(f"<p>{_render_inline_markdown(line)}</p>")
+
+    close_list()
+
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="ko">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            "<title>LocalSec Auditor Report</title>",
+            "<style>",
+            "body{font-family:Arial,sans-serif;line-height:1.6;color:#17202a;margin:32px;max-width:1080px}",
+            "h1,h2,h3{line-height:1.25}",
+            "ul{padding-left:24px}",
+            "li{margin:4px 0}",
+            ".severity{font-weight:700}",
+            ".severity-critical{color:#8a1f1f}",
+            ".severity-high{color:#b33a1f}",
+            ".severity-medium{color:#8a5a12}",
+            ".severity-low{color:#1f5f4c}",
+            ".severity-info{color:#405266}",
+            "</style>",
+            "</head>",
+            "<body>",
+            *body,
+            "</body>",
+            "</html>",
+            "",
+        ]
+    )
+
+
 def generate_markdown_report(scan_id: str) -> Path:
     db = SessionLocal()
     try:
@@ -247,4 +337,15 @@ def generate_markdown_report(scan_id: str) -> Path:
     paths = create_scan_dirs(scan_id)
     report_path = paths["reports"] / "report.md"
     report_path.write_text(report, encoding="utf-8")
+    return report_path
+
+
+def generate_html_report(scan_id: str) -> Path:
+    markdown_path = generate_markdown_report(scan_id)
+    markdown = markdown_path.read_text(encoding="utf-8")
+    html = _markdown_to_html(markdown)
+
+    paths = create_scan_dirs(scan_id)
+    report_path = paths["reports"] / "report.html"
+    report_path.write_text(html, encoding="utf-8")
     return report_path

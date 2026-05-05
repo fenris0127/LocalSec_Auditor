@@ -314,3 +314,59 @@ def test_generate_markdown_report_includes_cce_configuration_section(monkeypatch
     assert "This section is for review only. It does not change system settings." in report
     assert "automatic remediation" not in report.lower()
     assert "--remediate" not in report
+
+
+def test_generate_html_report_creates_html_from_markdown_and_masks_secrets(monkeypatch):
+    scan_id = f"report_html_test_{uuid4().hex}"
+    secret_value = "sk_test_html_report_secret_value"
+    session_local = make_session_local()
+    files: dict[str, str] = {}
+    monkeypatch.setattr(generator, "SessionLocal", session_local)
+    monkeypatch.setattr(generator, "retrieve_context_for_finding", lambda finding, **kwargs: [])
+    monkeypatch.setattr(
+        generator,
+        "create_scan_dirs",
+        lambda scan_id: {
+            "raw": MemoryPath(f"data/scans/{scan_id}/raw", files),
+            "normalized": MemoryPath(f"data/scans/{scan_id}/normalized", files),
+            "reports": MemoryPath(f"data/scans/{scan_id}/reports", files),
+        },
+    )
+
+    db = session_local()
+    try:
+        create_scan(
+            db,
+            scan_id=scan_id,
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+        create_finding(
+            db,
+            finding_id="finding_high",
+            scan_id=scan_id,
+            category="secret",
+            scanner="gitleaks",
+            severity="high",
+            title="Secret detected: generic-api-key",
+            status="open",
+            file_path=".env",
+            line=1,
+            llm_summary=f"Rotate leaked token {secret_value}.",
+        )
+    finally:
+        db.close()
+
+    report_path = generator.generate_html_report(scan_id)
+    report = report_path.read_text(encoding="utf-8")
+
+    assert str(report_path) == f"data/scans/{scan_id}/reports/report.html"
+    assert report_path.is_file()
+    assert "<!doctype html>" in report
+    assert "<h1>LocalSec Auditor Report:" in report
+    assert "Secret detected: generic-api-key" in report
+    assert 'class="severity severity-high"' in report
+    assert secret_value not in report
+    assert "[REDACTED_SECRET]" in report
