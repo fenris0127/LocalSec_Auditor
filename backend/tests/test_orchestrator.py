@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.crud.finding import create_finding, list_findings_by_scan
 from app.crud.scan import create_scan, get_scan
 from app.crud.task import create_task, list_tasks_by_scan
+from app.crud.task_log import list_task_logs
 from app.db.base import Base
 from app.orchestrator import hermes
 from app.scanners.runner import CommandResult
@@ -197,6 +198,58 @@ def test_run_scan_marks_failed_task_and_scan_failed(monkeypatch, tmp_path):
     assert status_by_tool == {"semgrep": "completed", "gitleaks": "failed", "trivy": "completed"}
     assert error_by_tool["gitleaks"] == "gitleaks failed"
     assert Counter(finding.scanner for finding in findings) == Counter({"semgrep": 4, "trivy": 2})
+
+
+def test_run_scan_stores_task_logs_and_masks_secret_stderr(monkeypatch, tmp_path):
+    secret_value = "ghp_task_log_secret_value"
+    session_local = _configure_session(monkeypatch, tmp_path)
+    db = session_local()
+    try:
+        scan = create_scan(
+            db,
+            scan_id="scan_log",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="queued",
+        )
+        create_task(
+            db,
+            task_id="task_semgrep",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="semgrep",
+            status="queued",
+        )
+    finally:
+        db.close()
+
+    monkeypatch.setattr(
+        hermes,
+        "run_semgrep",
+        lambda target_path, output_path, timeout=None: CommandResult(
+            stdout="",
+            stderr=f"scanner failed with token {secret_value}",
+            exit_code=1,
+        ),
+    )
+
+    hermes.run_scan("scan_log")
+
+    db = session_local()
+    try:
+        task = list_tasks_by_scan(db, "scan_log")[0]
+        logs = list_task_logs(db, "task_semgrep")
+    finally:
+        db.close()
+
+    serialized_logs = "\n".join(log.message for log in logs)
+
+    assert task.status == "failed"
+    assert secret_value not in task.error_message
+    assert "[REDACTED_SECRET]" in task.error_message
+    assert [log.level for log in logs] == ["info", "warning", "error"]
+    assert secret_value not in serialized_logs
+    assert "[REDACTED_SECRET]" in serialized_logs
 
 
 def test_rerun_scan_task_supersedes_existing_findings_and_persists_new_results(monkeypatch, tmp_path):

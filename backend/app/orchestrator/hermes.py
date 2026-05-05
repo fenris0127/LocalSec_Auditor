@@ -7,7 +7,9 @@ from pathlib import Path
 from app.crud.finding import create_finding, mark_findings_superseded_by_scanner
 from app.crud.scan import get_scan, update_scan_status
 from app.crud.task import get_task, list_tasks_by_scan, update_task_status
+from app.crud.task_log import create_task_log
 from app.db.database import SessionLocal
+from app.llm.secret_masking import mask_secret_text
 from app.normalizers.gitleaks import normalize_gitleaks
 from app.normalizers.grype import normalize_grype
 from app.normalizers.semgrep import normalize_semgrep
@@ -110,6 +112,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
     paths = create_scan_dirs(scan.id)
     raw_path = _raw_path_for_tool(tool_name, paths)
 
+    create_task_log(db, task_id=task.id, level="info", message=f"Starting task for {tool_name or 'unknown'}")
     update_task_status(
         db,
         task_id=task.id,
@@ -120,10 +123,16 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
 
     try:
         result, normalizer = _run_tool(tool_name, scan.target_path, raw_path, paths)
+        if result.stderr:
+            create_task_log(db, task_id=task.id, level="warning", message=result.stderr)
+
         if result.exit_code != 0:
-            error_message = result.error_message or result.stderr or (
-                f"{tool_name} failed with exit code {result.exit_code}"
+            error_message = mask_secret_text(
+                result.error_message
+                or result.stderr
+                or f"{tool_name} failed with exit code {result.exit_code}"
             )
+            create_task_log(db, task_id=task.id, level="error", message=error_message)
             update_task_status(
                 db,
                 task_id=task.id,
@@ -139,6 +148,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
             findings = normalizer(str(raw_path), scan.id)
             new_findings = _persist_findings(db, findings)
 
+        create_task_log(db, task_id=task.id, level="info", message=f"Completed task for {tool_name or 'unknown'}")
         update_task_status(
             db,
             task_id=task.id,
@@ -148,12 +158,14 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
         )
         return "completed", new_findings
     except Exception as exc:
+        error_message = mask_secret_text(exc)
+        create_task_log(db, task_id=task.id, level="error", message=error_message)
         update_task_status(
             db,
             task_id=task.id,
             status="failed",
             finished_at=datetime.utcnow(),
-            error_message=str(exc),
+            error_message=error_message,
         )
         return "failed", 0
 
