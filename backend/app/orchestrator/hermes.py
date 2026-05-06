@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
+from app.core.time import utc_now
 from app.crud.finding import create_finding, mark_findings_superseded_by_scanner
 from app.crud.scan import get_scan, update_scan_status
 from app.crud.task import get_task, list_tasks_by_scan, update_task_status
@@ -146,7 +146,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
         db,
         task_id=task.id,
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=utc_now(),
         error_message=None,
     )
 
@@ -166,7 +166,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
                 db,
                 task_id=task.id,
                 status="failed",
-                finished_at=datetime.utcnow(),
+                finished_at=utc_now(),
                 error_message=error_message,
             )
             return "failed", 0
@@ -182,7 +182,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
             db,
             task_id=task.id,
             status="completed",
-            finished_at=datetime.utcnow(),
+            finished_at=utc_now(),
             error_message=None,
         )
         return "completed", new_findings
@@ -193,7 +193,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
             db,
             task_id=task.id,
             status="failed",
-            finished_at=datetime.utcnow(),
+            finished_at=utc_now(),
             error_message=error_message,
         )
         return "failed", 0
@@ -208,7 +208,7 @@ def run_scan(scan_id: str) -> None:
         if scan.status == "cancelled":
             return
 
-        started_at = datetime.utcnow()
+        started_at = utc_now()
         update_scan_status(db, scan_id=scan_id, status="running", started_at=started_at)
 
         tasks = _sorted_tasks(list_tasks_by_scan(db, scan_id))
@@ -223,7 +223,7 @@ def run_scan(scan_id: str) -> None:
             db,
             scan_id=scan_id,
             status="failed" if overall_failed else "completed",
-            finished_at=datetime.utcnow(),
+            finished_at=utc_now(),
         )
     finally:
         db.close()

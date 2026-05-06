@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.scan import Scan
 
 
@@ -26,7 +27,7 @@ def create_scan(
         status=status,
         started_at=started_at,
         finished_at=finished_at,
-        created_at=created_at or datetime.utcnow(),
+        created_at=created_at or utc_now(),
     )
     db.add(scan)
     db.commit()

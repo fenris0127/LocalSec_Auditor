@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.project import Project
 
 
@@ -15,7 +16,7 @@ def create_project(
     created_at: datetime | None = None,
     updated_at: datetime | None = None,
 ) -> Project:
-    now = created_at or datetime.utcnow()
+    now = created_at or utc_now()
     project = Project(
         id=project_id,
         name=name,
@@ -53,7 +54,7 @@ def update_project(
         project.name = name
     if root_path is not None:
         project.root_path = root_path
-    project.updated_at = updated_at or datetime.utcnow()
+    project.updated_at = updated_at or utc_now()
 
     db.commit()
     db.refresh(project)

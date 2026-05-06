@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.llm.secret_masking import mask_secret_text
 from app.models.task_log import TaskLog
 
@@ -22,7 +23,7 @@ def create_task_log(
         task_id=task_id,
         level=level,
         message=mask_secret_text(message),
-        created_at=created_at or datetime.utcnow(),
+        created_at=created_at or utc_now(),
     )
     db.add(log)
     db.commit()
