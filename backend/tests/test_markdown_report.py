@@ -130,6 +130,14 @@ def test_generate_markdown_report_creates_report_with_stats_and_llm_summary(monk
     assert "- sast: 1" in report
     assert "- cve: 1" in report
     assert "- secret: 1" in report
+    assert "## Executive Summary" in report
+    assert "This summary is based only on scanner findings included in this report." in report
+    assert "- Overall risk: High" in report
+    assert "- Total scanner findings: 3" in report
+    assert "- Critical/High scanner findings: 2" in report
+    assert "- Most affected categories:" in report
+    assert "### Top Findings" in report
+    assert "[high] Potential SQL injection (semgrep, sast)" in report
     assert "## Priority List" in report
     assert "## Finding Details" in report
     assert "Validate the query construction and use parameterized statements." in report
@@ -137,6 +145,46 @@ def test_generate_markdown_report_creates_report_with_stats_and_llm_summary(monk
     assert secret_value not in report
     assert secret_api_key not in report
     assert "[REDACTED_SECRET]" in report
+
+
+def test_generate_markdown_report_includes_default_executive_summary_without_llm(monkeypatch):
+    scan_id = f"report_default_summary_test_{uuid4().hex}"
+    session_local = make_session_local()
+    files: dict[str, str] = {}
+    monkeypatch.setattr(generator, "SessionLocal", session_local)
+    monkeypatch.setattr(generator, "retrieve_context_for_finding", lambda finding, **kwargs: [])
+    monkeypatch.setattr(
+        generator,
+        "create_scan_dirs",
+        lambda scan_id: {
+            "raw": MemoryPath(f"data/scans/{scan_id}/raw", files),
+            "normalized": MemoryPath(f"data/scans/{scan_id}/normalized", files),
+            "reports": MemoryPath(f"data/scans/{scan_id}/reports", files),
+        },
+    )
+
+    db = session_local()
+    try:
+        create_scan(
+            db,
+            scan_id=scan_id,
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+    finally:
+        db.close()
+
+    report_path = generator.generate_markdown_report(scan_id)
+    report = report_path.read_text(encoding="utf-8")
+
+    assert "## Executive Summary" in report
+    assert "- Overall risk: No scanner findings" in report
+    assert "- Total scanner findings: 0" in report
+    assert "- Critical/High scanner findings: 0" in report
+    assert "- No scanner findings were detected." in report
+    assert "LLM Summary" not in report
 
 
 def test_generate_markdown_report_includes_rag_reference_documents(monkeypatch):
@@ -367,6 +415,8 @@ def test_generate_html_report_creates_html_from_markdown_and_masks_secrets(monke
     assert report_path.is_file()
     assert "<!doctype html>" in report
     assert "<h1>LocalSec Auditor Report:" in report
+    assert "<h2>Executive Summary</h2>" in report
+    assert "<h3>Top Findings</h3>" in report
     assert "Secret detected: generic-api-key" in report
     assert 'class="severity severity-high"' in report
     assert secret_value not in report

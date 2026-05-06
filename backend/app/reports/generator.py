@@ -65,6 +65,55 @@ def _render_priority_list(findings: Iterable[Finding]) -> list[str]:
     return lines
 
 
+def _overall_risk_label(severity_counts: Counter[str]) -> str:
+    if severity_counts.get("critical", 0):
+        return "Critical"
+    if severity_counts.get("high", 0):
+        return "High"
+    if severity_counts.get("medium", 0):
+        return "Medium"
+    if severity_counts.get("low", 0) or severity_counts.get("info", 0):
+        return "Low"
+    return "No scanner findings"
+
+
+def _format_top_categories(category_counts: Counter[str], limit: int = 3) -> str:
+    if not category_counts:
+        return "None"
+
+    ordered = sorted(category_counts.items(), key=lambda item: (-item[1], item[0]))
+    return ", ".join(f"{_display(category)}: {count}" for category, count in ordered[:limit])
+
+
+def _render_executive_summary(findings: Iterable[Finding]) -> list[str]:
+    ordered = sorted(findings, key=_priority_key)
+    severity_counts = Counter((finding.severity or "unknown").lower() for finding in ordered)
+    category_counts = Counter((finding.category or "unknown").lower() for finding in ordered)
+    high_priority_count = severity_counts.get("critical", 0) + severity_counts.get("high", 0)
+
+    lines = [
+        "This summary is based only on scanner findings included in this report.",
+        f"- Overall risk: {_overall_risk_label(severity_counts)}",
+        f"- Total scanner findings: {len(ordered)}",
+        f"- Critical/High scanner findings: {high_priority_count}",
+        f"- Most affected categories: {_format_top_categories(category_counts)}",
+        "",
+        "### Top Findings",
+        "",
+    ]
+
+    if not ordered:
+        lines.append("- No scanner findings were detected.")
+        return lines
+
+    for finding in ordered[:3]:
+        lines.append(
+            f"- [{_display(finding.severity)}] {_display(finding.title)} "
+            f"({_display(finding.scanner)}, {_display(finding.category)})"
+        )
+    return lines
+
+
 def _is_config_finding(finding: Finding) -> bool:
     return (finding.category or "").lower() in {"cce", "config"}
 
@@ -191,6 +240,10 @@ def _render_report(
         f"- Created At: {_display(scan.created_at)}",
         f"- Started At: {_display(scan.started_at)}",
         f"- Finished At: {_display(scan.finished_at)}",
+        "",
+        "## Executive Summary",
+        "",
+        *_render_executive_summary(findings),
         "",
         "## Summary",
         "",
