@@ -96,3 +96,8 @@ npm run dev
 - LLM output must not be treated as scanner evidence.
 - Raw secrets must not be stored, printed, or sent to the LLM.
 - MVP must not include automatic patching, production server modification, or fine-tuning code.
+
+## Evaluation Docs
+
+- [LLM analysis eval cases](docs/evals/eval_cases.md)
+- [Report quality checklist](docs/evals/report-quality-checklist.md)
