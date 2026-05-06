@@ -235,6 +235,11 @@ h1 {
   padding: 14px;
 }
 
+.status-message.compact {
+  padding: 10px;
+  font-size: 13px;
+}
+
 .status-message span {
   overflow-wrap: anywhere;
 }
@@ -613,6 +618,17 @@ tbody tr:last-child td {
 
 .tool-meta {
   gap: 8px;
+}
+
+.tool-update-actions {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #e6edf3;
+  padding-top: 10px;
+}
+
+.tool-update-actions button {
+  width: fit-content;
 }
 
 .settings-meta {

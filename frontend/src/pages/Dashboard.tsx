@@ -5,10 +5,42 @@ import { getDashboardSummary } from "../api/dashboard";
 import type { DashboardSummary } from "../api/dashboard";
 import { getOfflineMode } from "../api/settings";
 import type { OfflineModeResponse } from "../api/settings";
-import { getToolsStatus } from "../api/tools";
-import type { ToolName, ToolsStatusResponse } from "../api/tools";
+import { getToolsStatus, updateGrypeDb, updateTrivyDb } from "../api/tools";
+import type { ToolName, ToolsStatusResponse, ToolUpdateResponse, UpdatableToolName } from "../api/tools";
 
 const TOOL_NAMES: ToolName[] = ["semgrep", "gitleaks", "trivy", "syft", "grype"];
+const UPDATABLE_TOOLS: UpdatableToolName[] = ["trivy", "grype"];
+
+interface UpdateStatus {
+  isLoading: boolean;
+  message: string | null;
+  error: string | null;
+}
+
+const INITIAL_UPDATE_STATUS: Record<UpdatableToolName, UpdateStatus> = {
+  trivy: {
+    isLoading: false,
+    message: null,
+    error: null,
+  },
+  grype: {
+    isLoading: false,
+    message: null,
+    error: null,
+  },
+};
+
+function isUpdatableTool(toolName: ToolName): toolName is UpdatableToolName {
+  return UPDATABLE_TOOLS.includes(toolName as UpdatableToolName);
+}
+
+function formatUpdateResult(result: ToolUpdateResponse): string {
+  const command = result.command.join(" ");
+  if (result.success) {
+    return `Update completed: ${command}`;
+  }
+  return result.error_message ?? `Update failed with exit code ${result.exit_code ?? "unknown"}`;
+}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -30,6 +62,11 @@ function ToolsStatus(): ReactElement {
   const [toolsStatus, setToolsStatus] = useState<ToolsStatusResponse | null>(null);
   const [isLoadingTools, setIsLoadingTools] = useState(true);
   const [toolsError, setToolsError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<OfflineModeResponse | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [updateStatuses, setUpdateStatuses] =
+    useState<Record<UpdatableToolName, UpdateStatus>>(INITIAL_UPDATE_STATUS);
 
   useEffect(() => {
     let isMounted = true;
@@ -60,9 +97,79 @@ function ToolsStatus(): ReactElement {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadOfflineMode(): Promise<void> {
+      setIsLoadingSettings(true);
+      setSettingsError(null);
+      try {
+        const result = await getOfflineMode();
+        if (isMounted) {
+          setSettings(result);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSettingsError(error instanceof Error ? error.message : "Could not load offline mode");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSettings(false);
+        }
+      }
+    }
+
+    void loadOfflineMode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const updatesEnabled = settings?.updates_enabled === true;
+
+  async function handleUpdate(toolName: UpdatableToolName): Promise<void> {
+    setUpdateStatuses((current) => ({
+      ...current,
+      [toolName]: {
+        isLoading: true,
+        message: null,
+        error: null,
+      },
+    }));
+
+    try {
+      const result = toolName === "trivy" ? await updateTrivyDb() : await updateGrypeDb();
+      setUpdateStatuses((current) => ({
+        ...current,
+        [toolName]: {
+          isLoading: false,
+          message: result.success ? formatUpdateResult(result) : null,
+          error: result.success ? null : formatUpdateResult(result),
+        },
+      }));
+    } catch (error) {
+      setUpdateStatuses((current) => ({
+        ...current,
+        [toolName]: {
+          isLoading: false,
+          message: null,
+          error: error instanceof Error ? error.message : `Could not update ${toolName} DB`,
+        },
+      }));
+    }
+  }
+
   return (
     <div className="summary-panel tools-panel">
-      <h2>Scanner tools</h2>
+      <div className="panel-heading-row">
+        <h2>Scanner tools</h2>
+        {settings ? (
+          <span className={updatesEnabled ? "status-pill success" : "status-pill warning"}>
+            {updatesEnabled ? "updates enabled" : "offline mode"}
+          </span>
+        ) : null}
+      </div>
 
       {isLoadingTools ? (
         <div className="empty-panel compact" role="status">
@@ -78,11 +185,22 @@ function ToolsStatus(): ReactElement {
         </div>
       ) : null}
 
+      {settingsError ? (
+        <div className="status-message error" role="alert">
+          <strong>Could not load update mode</strong>
+          <span>{settingsError}</span>
+        </div>
+      ) : null}
+
       {!isLoadingTools && !toolsError && toolsStatus ? (
         <div className="tools-grid">
           {TOOL_NAMES.map((toolName) => {
             const status = toolsStatus[toolName];
             const installed = Boolean(status?.installed);
+            const canUpdate = isUpdatableTool(toolName);
+            const updateStatus = canUpdate ? updateStatuses[toolName] : null;
+            const updateDisabled =
+              !canUpdate || !updatesEnabled || isLoadingSettings || Boolean(updateStatus?.isLoading);
 
             return (
               <div className={installed ? "tool-card" : "tool-card warning"} key={toolName}>
@@ -102,6 +220,35 @@ function ToolsStatus(): ReactElement {
                     <dd>{status?.error ?? "N/A"}</dd>
                   </div>
                 </dl>
+                {canUpdate ? (
+                  <div className="tool-update-actions">
+                    <button
+                      className="secondary-action"
+                      disabled={updateDisabled}
+                      onClick={() => void handleUpdate(toolName)}
+                      type="button"
+                    >
+                      {updateStatus?.isLoading
+                        ? "Updating..."
+                        : toolName === "trivy"
+                          ? "Update Trivy DB"
+                          : "Update Grype DB"}
+                    </button>
+                    {!updatesEnabled && !isLoadingSettings ? (
+                      <p className="muted">Disabled while service is in offline mode.</p>
+                    ) : null}
+                    {updateStatus?.message ? (
+                      <div className="status-message success compact" role="status">
+                        <span>{updateStatus.message}</span>
+                      </div>
+                    ) : null}
+                    {updateStatus?.error ? (
+                      <div className="status-message error compact" role="alert">
+                        <span>{updateStatus.error}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             );
           })}
