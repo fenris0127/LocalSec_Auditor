@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db_session
 from app.scanners.tools import get_tools_status
 from app.services.dashboard_summary import build_dashboard_summary
+from app.tools.grype import OfflineModeError as GrypeOfflineModeError
+from app.tools.grype import update_grype_db
 from app.tools.trivy import OfflineModeError, update_trivy_db
 
 
@@ -37,6 +39,14 @@ def update_trivy_db_api() -> ToolUpdateResponse:
     try:
         return update_trivy_db()
     except OfflineModeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/tools/grype/update-db", response_model=ToolUpdateResponse)
+def update_grype_db_api() -> ToolUpdateResponse:
+    try:
+        return update_grype_db()
+    except GrypeOfflineModeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
