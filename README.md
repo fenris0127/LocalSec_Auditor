@@ -91,6 +91,38 @@ Install only the scanners you intend to use:
 Lynis and OpenSCAP checks are read-only and are best suited to Linux or WSL
 targets. LocalSec Auditor does not perform automatic remediation.
 
+## OpenSCAP Setup
+
+OpenSCAP support in v1.0 is read-only evaluation only. LocalSec Auditor runs
+`oscap xccdf eval`, stores the XML result, normalizes failed rules into
+CCE/config findings, and does not run remediation.
+
+Required OpenSCAP inputs:
+
+- `oscap` binary installed on the machine running the backend
+- Local SCAP content file, for example an SSG datastream XML file
+- XCCDF profile id compatible with that content file
+
+Current v1.0 settings:
+
+- SCAP content path can be set with `LOCALSEC_SCAP_CONTENT_PATH`.
+- If `LOCALSEC_SCAP_CONTENT_PATH` is not set, the backend uses
+  `/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml`.
+- The Hermes OpenSCAP task currently uses
+  `xccdf_org.ssgproject.content_profile_standard`.
+- `LOCALSC_OPENSCAP_PROFILE` is not implemented in v1.0; profile selection is a
+  future configuration polish item.
+
+Example:
+
+```powershell
+$env:LOCALSEC_SCAP_CONTENT_PATH = "/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml"
+```
+
+Linux or WSL is recommended for OpenSCAP scans. Validate the selected SCAP
+content and profile in a test environment before running against operational
+systems. LocalSec Auditor does not apply settings to the target system.
+
 ## PDF Export Requirements
 
 Markdown and HTML reports are the default report formats and work without a PDF
