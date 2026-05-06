@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import {
   analyzeFinding,
   compareScanWithLatest,
-  createScanReport,
+  createReportArtifact,
   getScan,
   getScanProgress,
   getScanReport,
@@ -16,6 +16,7 @@ import type {
   Finding,
   FindingComparisonSummary,
   ReferenceContext,
+  ReportFormat,
   ScanComparisonResponse,
   ScanProgressResponse,
   ScanSummary,
@@ -389,8 +390,10 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
   const [analysisErrors, setAnalysisErrors] = useState<Record<string, string>>({});
   const [reportContent, setReportContent] = useState<string | null>(null);
   const [reportPath, setReportPath] = useState<string | null>(null);
+  const [reportFormat, setReportFormat] = useState<ReportFormat>("markdown");
   const [isCreatingReport, setIsCreatingReport] = useState(false);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [comparison, setComparison] = useState<ScanComparisonResponse | null>(null);
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
@@ -408,6 +411,8 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
       setAnalysisErrors({});
       setReportContent(null);
       setReportPath(null);
+      setReportFormat("markdown");
+      setReportNotice(null);
       setReportError(null);
       setComparison(null);
       setComparisonError(null);
@@ -534,17 +539,21 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
     }
   }
 
-  async function handleCreateReport(id: string): Promise<void> {
+  async function handleCreateReportArtifact(id: string, format: ReportFormat): Promise<void> {
     setIsCreatingReport(true);
+    setReportNotice(null);
     setReportError(null);
+    setReportContent(null);
+    setReportPath(null);
 
     try {
-      const created = await createScanReport(id);
-      const loaded = await getScanReport(id);
-      setReportPath(loaded.report_path || created.report_path);
-      setReportContent(loaded.content);
+      const result = await createReportArtifact(id, format);
+      const artifactPath = result.report_path ?? result.export_path ?? null;
+      setReportPath(artifactPath);
+      setReportContent(result.content ?? null);
+      setReportNotice(`${format.toUpperCase()} report generated.`);
     } catch (error) {
-      setReportError(error instanceof Error ? error.message : "Could not create report");
+      setReportError(error instanceof Error ? error.message : `Could not create ${format} report`);
     } finally {
       setIsCreatingReport(false);
     }
@@ -552,6 +561,7 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
 
   async function handleLoadReport(id: string): Promise<void> {
     setIsLoadingReport(true);
+    setReportNotice(null);
     setReportError(null);
 
     try {
@@ -835,15 +845,31 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
           <div className="panel-heading-row">
             <h2>Report</h2>
             <div className="button-row">
+              <label className="format-select-label">
+                <span>Format</span>
+                <select
+                  disabled={isCreatingReport || isLoadingReport}
+                  value={reportFormat}
+                  onChange={(event) => {
+                    setReportFormat(event.target.value as ReportFormat);
+                  }}
+                >
+                  <option value="markdown">markdown</option>
+                  <option value="html">html</option>
+                  <option value="pdf">pdf</option>
+                  <option value="csv">csv</option>
+                  <option value="json">json</option>
+                </select>
+              </label>
               <button
                 className="inline-action"
                 disabled={isCreatingReport || isLoadingReport}
                 type="button"
                 onClick={() => {
-                  void handleCreateReport(scan.id);
+                  void handleCreateReportArtifact(scan.id, reportFormat);
                 }}
               >
-                {isCreatingReport ? "Generating" : "Report 생성"}
+                {isCreatingReport ? "Generating" : "Generate"}
               </button>
               <button
                 className="secondary-action"
@@ -858,14 +884,26 @@ export function ScanDetail({ scanId }: ScanDetailProps): ReactElement {
             </div>
           </div>
 
+          {reportNotice ? (
+            <div className="status-message success" role="status">
+              <strong>Report generated</strong>
+              <span>{reportNotice}</span>
+            </div>
+          ) : null}
+
           {reportError ? (
             <div className="status-message error" role="alert">
-              <strong>Could not load report</strong>
+              <strong>Could not generate report</strong>
               <span>{reportError}</span>
             </div>
           ) : null}
 
-          {reportPath ? <p className="muted">Report path: {reportPath}</p> : null}
+          {reportPath ? (
+            <div className="report-path-panel">
+              <strong>File path</strong>
+              <code>{reportPath}</code>
+            </div>
+          ) : null}
 
           {reportContent ? (
             <pre className="report-content">{reportContent}</pre>

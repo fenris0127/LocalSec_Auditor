@@ -24,7 +24,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -756,7 +757,48 @@ tbody tr:last-child td {
 .button-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.format-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #405266;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.format-select-label select {
+  min-width: 128px;
+  border: 1px solid #ccd6e0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17202a;
+  padding: 8px 10px;
+  text-transform: lowercase;
+}
+
+.format-select-label select:disabled {
+  cursor: not-allowed;
+  color: #7a8da0;
+  background: #f2f5f8;
+}
+
+.report-path-panel {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.report-path-panel code {
+  color: #405266;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .report-content {

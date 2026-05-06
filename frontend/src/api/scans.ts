@@ -128,6 +128,14 @@ export interface ScanReportResponse {
   content: string;
 }
 
+export type ReportFormat = "markdown" | "html" | "pdf" | "csv" | "json";
+
+export interface ReportArtifactResponse {
+  report_path?: string;
+  export_path?: string;
+  content?: string;
+}
+
 async function requestJson<T>(
   path: string,
   fallbackMessage: string,
@@ -235,5 +243,25 @@ export function getScanReport(scanId: string): Promise<ScanReportResponse> {
   return requestJson<ScanReportResponse>(
     `/api/scans/${encodeURIComponent(scanId)}/report`,
     "Could not load report",
+  );
+}
+
+export function createReportArtifact(
+  scanId: string,
+  format: ReportFormat,
+): Promise<ReportArtifactResponse> {
+  const encodedScanId = encodeURIComponent(scanId);
+  const pathByFormat: Record<ReportFormat, string> = {
+    markdown: `/api/scans/${encodedScanId}/report`,
+    html: `/api/scans/${encodedScanId}/report/html`,
+    pdf: `/api/scans/${encodedScanId}/report/pdf`,
+    csv: `/api/scans/${encodedScanId}/export/csv`,
+    json: `/api/scans/${encodedScanId}/export/json`,
+  };
+
+  return requestJson<ReportArtifactResponse>(
+    pathByFormat[format],
+    `Could not create ${format} report`,
+    { method: "POST" },
   );
 }
