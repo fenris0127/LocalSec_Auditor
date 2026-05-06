@@ -13,16 +13,23 @@ OLLAMA_MODEL_ENV = "OLLAMA_MODEL"
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 30.0
 DEFAULT_WORKSPACE_ROOT = Path("C:/AI/projects")
 WORKSPACE_ROOT_ENV = "LOCALSC_WORKSPACE"
+OFFLINE_MODE_ENV = "LOCALSC_OFFLINE_MODE"
+DEFAULT_OFFLINE_MODE = True
 
 
 @dataclass(frozen=True)
 class Settings:
     database_path: Path
     workspace_root: Path = DEFAULT_WORKSPACE_ROOT
+    offline_mode: bool = DEFAULT_OFFLINE_MODE
 
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.database_path.as_posix()}"
+
+    @property
+    def updates_enabled(self) -> bool:
+        return not self.offline_mode
 
 
 @dataclass(frozen=True)
@@ -32,10 +39,24 @@ class OllamaSettings:
     timeout_seconds: float
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def get_settings() -> Settings:
     db_path = Path(os.getenv(DB_PATH_ENV, str(DEFAULT_DB_PATH))).expanduser()
     workspace_root = Path(os.getenv(WORKSPACE_ROOT_ENV, str(DEFAULT_WORKSPACE_ROOT))).expanduser()
-    return Settings(database_path=db_path, workspace_root=workspace_root)
+    offline_mode = _env_bool(OFFLINE_MODE_ENV, DEFAULT_OFFLINE_MODE)
+    return Settings(database_path=db_path, workspace_root=workspace_root, offline_mode=offline_mode)
 
 
 def get_ollama_settings() -> OllamaSettings:

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.findings import router as findings_router
 from app.api.scans import router as scans_router
+from app.api.settings import router as settings_router
 from app.api.tools import router as tools_router
 from app.db.database import create_db_tables
 
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 app.include_router(findings_router)
 app.include_router(scans_router)
+app.include_router(settings_router)
 app.include_router(tools_router)
 
 

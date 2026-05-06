@@ -3,6 +3,8 @@ import type { ReactElement } from "react";
 
 import { getDashboardSummary } from "../api/dashboard";
 import type { DashboardSummary } from "../api/dashboard";
+import { getOfflineMode } from "../api/settings";
+import type { OfflineModeResponse } from "../api/settings";
 import { getToolsStatus } from "../api/tools";
 import type { ToolName, ToolsStatusResponse } from "../api/tools";
 
@@ -109,6 +111,81 @@ function ToolsStatus(): ReactElement {
   );
 }
 
+function OfflineModeStatus(): ReactElement {
+  const [settings, setSettings] = useState<OfflineModeResponse | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadOfflineMode(): Promise<void> {
+      setIsLoadingSettings(true);
+      setSettingsError(null);
+      try {
+        const result = await getOfflineMode();
+        if (isMounted) {
+          setSettings(result);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSettingsError(error instanceof Error ? error.message : "Could not load offline mode");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSettings(false);
+        }
+      }
+    }
+
+    void loadOfflineMode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="summary-panel settings-panel">
+      <div className="panel-heading-row">
+        <h2>Service mode</h2>
+        {settings ? (
+          <span className={settings.offline_mode ? "status-pill warning" : "status-pill success"}>
+            {settings.mode}
+          </span>
+        ) : null}
+      </div>
+
+      {isLoadingSettings ? (
+        <div className="empty-panel compact" role="status">
+          <strong>Loading mode</strong>
+          <span>Checking local service mode.</span>
+        </div>
+      ) : null}
+
+      {settingsError ? (
+        <div className="status-message error" role="alert">
+          <strong>Could not load service mode</strong>
+          <span>{settingsError}</span>
+        </div>
+      ) : null}
+
+      {!isLoadingSettings && !settingsError && settings ? (
+        <dl className="settings-meta">
+          <div>
+            <dt>Environment</dt>
+            <dd>{settings.env_var}</dd>
+          </div>
+          <div>
+            <dt>Updates</dt>
+            <dd>{settings.updates_enabled ? "enabled" : "disabled"}</dd>
+          </div>
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
 export function Dashboard(): ReactElement {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,6 +227,8 @@ export function Dashboard(): ReactElement {
         <h1>Scan overview</h1>
         <p className="section-copy">Review created scans and open a scan to inspect tasks and findings.</p>
       </div>
+
+      <OfflineModeStatus />
 
       <div className="summary-panel dashboard-summary-panel">
         <h2>Risk trend summary</h2>

@@ -529,6 +529,10 @@ tbody tr:last-child td {
   margin-bottom: 18px;
 }
 
+.settings-panel {
+  margin-bottom: 18px;
+}
+
 .dashboard-summary-panel {
   margin-bottom: 18px;
 }
@@ -611,13 +615,24 @@ tbody tr:last-child td {
   gap: 8px;
 }
 
+.settings-meta {
+  gap: 8px;
+}
+
 .tool-meta div {
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 8px;
 }
 
+.settings-meta div {
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+}
+
 .tool-meta dt,
-.tool-meta dd {
+.tool-meta dd,
+.settings-meta dt,
+.settings-meta dd {
   font-size: 13px;
 }
 
