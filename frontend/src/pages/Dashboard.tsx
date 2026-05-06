@@ -8,7 +8,7 @@ import type { OfflineModeResponse } from "../api/settings";
 import { getToolsStatus, updateGrypeDb, updateTrivyDb } from "../api/tools";
 import type { ToolName, ToolsStatusResponse, ToolUpdateResponse, UpdatableToolName } from "../api/tools";
 
-const TOOL_NAMES: ToolName[] = ["semgrep", "gitleaks", "trivy", "syft", "grype"];
+const TOOL_NAMES: ToolName[] = ["semgrep", "gitleaks", "trivy", "syft", "grype", "lynis", "openscap"];
 const UPDATABLE_TOOLS: UpdatableToolName[] = ["trivy", "grype"];
 
 interface UpdateStatus {
@@ -196,18 +196,20 @@ function ToolsStatus(): ReactElement {
         <div className="tools-grid">
           {TOOL_NAMES.map((toolName) => {
             const status = toolsStatus[toolName];
+            const isReported = status !== undefined;
             const installed = Boolean(status?.installed);
             const canUpdate = isUpdatableTool(toolName);
             const updateStatus = canUpdate ? updateStatuses[toolName] : null;
             const updateDisabled =
               !canUpdate || !updatesEnabled || isLoadingSettings || Boolean(updateStatus?.isLoading);
+            const statusLabel = !isReported ? "not reported" : installed ? "installed" : "missing";
 
             return (
               <div className={installed ? "tool-card" : "tool-card warning"} key={toolName}>
                 <div className="tool-card-header">
                   <strong>{toolName}</strong>
                   <span className={installed ? "status-pill success" : "status-pill warning"}>
-                    {installed ? "installed" : "missing"}
+                    {statusLabel}
                   </span>
                 </div>
                 <dl className="tool-meta">
@@ -217,7 +219,7 @@ function ToolsStatus(): ReactElement {
                   </div>
                   <div>
                     <dt>Error</dt>
-                    <dd>{status?.error ?? "N/A"}</dd>
+                    <dd>{status?.error ?? (isReported ? "N/A" : "Tool status is not returned by API.")}</dd>
                   </div>
                 </dl>
                 {canUpdate ? (

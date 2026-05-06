@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "../config/api";
 
-export type ToolName = "semgrep" | "gitleaks" | "trivy" | "syft" | "grype";
+export type ToolName = "semgrep" | "gitleaks" | "trivy" | "syft" | "grype" | "lynis" | "openscap";
 export type UpdatableToolName = Extract<ToolName, "trivy" | "grype">;
 
 export interface ToolStatus {
@@ -9,7 +9,7 @@ export interface ToolStatus {
   error: string | null;
 }
 
-export type ToolsStatusResponse = Record<ToolName, ToolStatus>;
+export type ToolsStatusResponse = Partial<Record<ToolName, ToolStatus>>;
 
 export interface ToolUpdateResponse {
   command: string[];
