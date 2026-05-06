@@ -12,17 +12,30 @@ from app.db.database import SessionLocal
 from app.llm.secret_masking import mask_secret_text
 from app.normalizers.gitleaks import normalize_gitleaks
 from app.normalizers.grype import normalize_grype
+from app.normalizers.lynis import normalize_lynis
+from app.normalizers.openscap import normalize_openscap
 from app.normalizers.semgrep import normalize_semgrep
 from app.normalizers.trivy import normalize_trivy
 from app.scanners.gitleaks import run_gitleaks
 from app.scanners.grype import run_grype_sbom
+from app.scanners.lynis import run_lynis_audit
+from app.scanners.openscap import run_openscap
 from app.scanners.semgrep import run_semgrep
 from app.scanners.syft import run_syft
 from app.scanners.trivy import run_trivy_fs
 from app.services.scan_dirs import create_scan_dirs
 
 
-TASK_TOOL_ORDER = {"syft": 0, "grype": 1, "trivy": 2, "semgrep": 3, "gitleaks": 4}
+TASK_TOOL_ORDER = {
+    "syft": 0,
+    "grype": 1,
+    "trivy": 2,
+    "semgrep": 3,
+    "gitleaks": 4,
+    "lynis": 5,
+    "openscap": 6,
+}
+DEFAULT_OPENSCAP_PROFILE = "xccdf_org.ssgproject.content_profile_standard"
 
 
 @dataclass(frozen=True)
@@ -56,6 +69,10 @@ def _raw_path_for_tool(tool_name: str, paths: dict[str, Path]) -> Path:
         return paths["raw_syft_sbom"]
     if tool_name == "grype":
         return paths["raw_grype"]
+    if tool_name == "lynis":
+        return paths["raw"] / "lynis.txt"
+    if tool_name == "openscap":
+        return paths["raw"] / "openscap.xml"
     return paths["raw"] / f"{tool_name}.json"
 
 
@@ -64,6 +81,10 @@ def _run_tool(tool_name: str, target_path: str, raw_path: Path, paths: dict[str,
         return run_syft(target_path, str(raw_path)), None
     if tool_name == "grype":
         return run_grype_sbom(str(paths["raw_syft_sbom"]), str(raw_path)), normalize_grype
+    if tool_name == "lynis":
+        return run_lynis_audit(str(raw_path)), normalize_lynis
+    if tool_name == "openscap":
+        return run_openscap(DEFAULT_OPENSCAP_PROFILE, str(raw_path)), normalize_openscap
 
     runner, normalizer, _ = _scanner_for_tool(tool_name)
     return runner(target_path, str(raw_path)), normalizer
@@ -75,6 +96,14 @@ def _persist_raw_output(raw_path: Path, result, *, overwrite: bool = False) -> N
     if result.stdout:
         raw_path.parent.mkdir(parents=True, exist_ok=True)
         raw_path.write_text(result.stdout, encoding="utf-8")
+
+
+def _has_usable_scan_result(tool_name: str, result, raw_path: Path) -> bool:
+    if result.exit_code == 0:
+        return True
+    if tool_name == "openscap" and result.exit_code == 2:
+        return raw_path.exists() or bool(result.stdout)
+    return False
 
 
 def _persist_findings(db, findings) -> int:
@@ -126,7 +155,7 @@ def _run_single_task(db, scan, task, *, overwrite_raw: bool = False) -> tuple[st
         if result.stderr:
             create_task_log(db, task_id=task.id, level="warning", message=result.stderr)
 
-        if result.exit_code != 0:
+        if not _has_usable_scan_result(tool_name, result, raw_path):
             error_message = mask_secret_text(
                 result.error_message
                 or result.stderr

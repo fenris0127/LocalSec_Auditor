@@ -157,6 +157,114 @@ def test_run_scan_executes_syft_then_grype_and_persists_grype_findings(monkeypat
     assert {finding.component for finding in findings} == {"lodash", "axios"}
 
 
+def test_run_scan_executes_lynis_and_persists_config_findings(monkeypatch, tmp_path):
+    session_local = _configure_session(monkeypatch, tmp_path)
+    db = session_local()
+    try:
+        scan = create_scan(
+            db,
+            scan_id="scan_lynis",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="queued",
+        )
+        create_task(
+            db,
+            task_id="task_lynis",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="lynis",
+            status="queued",
+        )
+    finally:
+        db.close()
+
+    lynis_text = (Path(__file__).parent / "fixtures" / "sample_lynis.txt").read_text(encoding="utf-8")
+    calls: list[str] = []
+
+    def fake_lynis(output_path: str, timeout=None) -> CommandResult:
+        calls.append(output_path)
+        return CommandResult(stdout=lynis_text, stderr="", exit_code=0)
+
+    monkeypatch.setattr(hermes, "run_lynis_audit", fake_lynis)
+
+    hermes.run_scan("scan_lynis")
+
+    db = session_local()
+    try:
+        scan = get_scan(db, "scan_lynis")
+        tasks = list_tasks_by_scan(db, "scan_lynis")
+        findings = list_findings_by_scan(db, "scan_lynis")
+    finally:
+        db.close()
+
+    raw_path = tmp_path / "data" / "scans" / "scan_lynis" / "raw" / "lynis.txt"
+
+    assert calls == [str(raw_path)]
+    assert raw_path.is_file()
+    assert scan is not None
+    assert scan.status == "completed"
+    assert {task.status for task in tasks} == {"completed"}
+    assert Counter(finding.scanner for finding in findings) == Counter({"lynis": 4})
+    assert {finding.category for finding in findings} == {"config"}
+    assert all(finding.raw_json_path == str(raw_path) for finding in findings)
+
+
+def test_run_scan_executes_openscap_and_persists_cce_findings(monkeypatch, tmp_path):
+    session_local = _configure_session(monkeypatch, tmp_path)
+    db = session_local()
+    try:
+        scan = create_scan(
+            db,
+            scan_id="scan_openscap",
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="queued",
+        )
+        create_task(
+            db,
+            task_id="task_openscap",
+            scan_id=scan.id,
+            task_type="scanner",
+            tool_name="openscap",
+            status="queued",
+        )
+    finally:
+        db.close()
+
+    openscap_xml = (Path(__file__).parent / "fixtures" / "sample_openscap.xml").read_text(encoding="utf-8")
+    calls: list[tuple[str, str]] = []
+
+    def fake_openscap(profile: str, output_path: str, timeout=None) -> CommandResult:
+        calls.append((profile, output_path))
+        Path(output_path).write_text(openscap_xml, encoding="utf-8")
+        return CommandResult(stdout="", stderr="", exit_code=2)
+
+    monkeypatch.setattr(hermes, "run_openscap", fake_openscap)
+
+    hermes.run_scan("scan_openscap")
+
+    db = session_local()
+    try:
+        scan = get_scan(db, "scan_openscap")
+        tasks = list_tasks_by_scan(db, "scan_openscap")
+        findings = list_findings_by_scan(db, "scan_openscap")
+    finally:
+        db.close()
+
+    raw_path = tmp_path / "data" / "scans" / "scan_openscap" / "raw" / "openscap.xml"
+
+    assert calls == [(hermes.DEFAULT_OPENSCAP_PROFILE, str(raw_path))]
+    assert raw_path.is_file()
+    assert scan is not None
+    assert scan.status == "completed"
+    assert {task.status for task in tasks} == {"completed"}
+    assert Counter(finding.scanner for finding in findings) == Counter({"openscap": 2})
+    assert {finding.category for finding in findings} == {"cce"}
+    assert all(finding.raw_json_path == str(raw_path) for finding in findings)
+    assert "remediate" not in " ".join(value for call in calls for value in call).lower()
+
+
 def test_run_scan_marks_failed_task_and_scan_failed(monkeypatch, tmp_path):
     session_local = _configure_session(monkeypatch, tmp_path)
     db = session_local()
