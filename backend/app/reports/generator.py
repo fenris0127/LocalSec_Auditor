@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
+import csv
 from html import escape
+import json
 from pathlib import Path
 import re
+from io import StringIO
 from typing import Iterable
 
 from app.crud.finding import list_findings_by_scan
@@ -25,6 +28,31 @@ SEVERITY_ORDER = {
     "info": 4,
 }
 
+FINDING_EXPORT_FIELDS = [
+    "id",
+    "scan_id",
+    "category",
+    "scanner",
+    "severity",
+    "title",
+    "rule_id",
+    "fingerprint",
+    "file_path",
+    "line",
+    "component",
+    "installed_version",
+    "fixed_version",
+    "cve",
+    "cwe",
+    "cce_id",
+    "current_value",
+    "expected_value",
+    "raw_json_path",
+    "llm_summary",
+    "detected_by",
+    "status",
+]
+
 
 class ReportExportError(RuntimeError):
     """Raised when a report export backend cannot produce the requested file."""
@@ -35,6 +63,21 @@ def _display(value: object) -> str:
         return "N/A"
     text = mask_secret_text(value).strip()
     return text if text else "N/A"
+
+
+def _export_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    return mask_secret_text(value)
+
+
+def _finding_export_row(finding: Finding) -> dict[str, object]:
+    return {
+        field: _export_value(getattr(finding, field, None))
+        for field in FINDING_EXPORT_FIELDS
+    }
 
 
 def _format_counter(counter: Counter[str]) -> list[str]:
@@ -297,6 +340,14 @@ def get_pdf_report_path(scan_id: str) -> Path:
     return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "report.pdf"
 
 
+def get_findings_csv_path(scan_id: str) -> Path:
+    return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "findings.csv"
+
+
+def get_findings_json_path(scan_id: str) -> Path:
+    return PROJECT_ROOT / "data" / "scans" / scan_id / "reports" / "findings.json"
+
+
 def _render_inline_markdown(value: str) -> str:
     text = escape(mask_secret_text(value))
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
@@ -400,6 +451,45 @@ def generate_markdown_report(scan_id: str) -> Path:
     report_path = paths["reports"] / "report.md"
     report_path.write_text(report, encoding="utf-8")
     return report_path
+
+
+def _get_scan_findings_for_export(scan_id: str) -> list[Finding]:
+    db = SessionLocal()
+    try:
+        scan = get_scan(db, scan_id)
+        if scan is None:
+            raise ValueError(f"Scan not found: {scan_id}")
+        return list_findings_by_scan(db, scan_id)
+    finally:
+        db.close()
+
+
+def export_findings_csv(scan_id: str) -> Path:
+    findings = _get_scan_findings_for_export(scan_id)
+    rows = [_finding_export_row(finding) for finding in findings]
+
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=FINDING_EXPORT_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+
+    paths = create_scan_dirs(scan_id)
+    export_path = paths["reports"] / "findings.csv"
+    export_path.write_text(output.getvalue(), encoding="utf-8")
+    return export_path
+
+
+def export_findings_json(scan_id: str) -> Path:
+    findings = _get_scan_findings_for_export(scan_id)
+    rows = [_finding_export_row(finding) for finding in findings]
+
+    paths = create_scan_dirs(scan_id)
+    export_path = paths["reports"] / "findings.json"
+    export_path.write_text(
+        json.dumps(rows, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return export_path
 
 
 def generate_html_report(scan_id: str) -> Path:

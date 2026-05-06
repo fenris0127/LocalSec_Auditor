@@ -107,11 +107,17 @@ def test_report_apis_return_404_for_missing_scan():
     try:
         post_response = client.post("/api/scans/missing/report")
         get_response = client.get("/api/scans/missing/report")
+        csv_response = client.post("/api/scans/missing/export/csv")
+        json_response = client.post("/api/scans/missing/export/json")
 
         assert post_response.status_code == 404
         assert post_response.json()["detail"] == "Scan not found"
         assert get_response.status_code == 404
         assert get_response.json()["detail"] == "Scan not found"
+        assert csv_response.status_code == 404
+        assert csv_response.json()["detail"] == "Scan not found"
+        assert json_response.status_code == 404
+        assert json_response.json()["detail"] == "Scan not found"
     finally:
         app.dependency_overrides.clear()
 
@@ -127,5 +133,49 @@ def test_get_report_api_returns_404_when_report_is_missing():
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Report not found"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_findings_csv_api_returns_export_content():
+    client, session_local = make_client()
+    seed_scan(session_local)
+    files = {
+        "data/scans/scan_001/reports/findings.csv": "id,title\nfinding_1,Example\n",
+    }
+    export_path = MemoryPath("data/scans/scan_001/reports/findings.csv", files)
+
+    try:
+        with patch("app.api.scans.export_findings_csv", return_value=export_path) as export_mock:
+            response = client.post("/api/scans/scan_001/export/csv")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "export_path": "data/scans/scan_001/reports/findings.csv",
+            "content": "id,title\nfinding_1,Example\n",
+        }
+        export_mock.assert_called_once_with("scan_001")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_findings_json_api_returns_export_content():
+    client, session_local = make_client()
+    seed_scan(session_local)
+    files = {
+        "data/scans/scan_001/reports/findings.json": '[{"id": "finding_1"}]\n',
+    }
+    export_path = MemoryPath("data/scans/scan_001/reports/findings.json", files)
+
+    try:
+        with patch("app.api.scans.export_findings_json", return_value=export_path) as export_mock:
+            response = client.post("/api/scans/scan_001/export/json")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "export_path": "data/scans/scan_001/reports/findings.json",
+            "content": '[{"id": "finding_1"}]\n',
+        }
+        export_mock.assert_called_once_with("scan_001")
     finally:
         app.dependency_overrides.clear()

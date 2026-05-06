@@ -10,7 +10,12 @@ from app.core.workspace import get_workspace_root, is_path_inside_workspace
 from app.db.database import get_db_session
 from app.orchestrator.hermes import rerun_scan_task, run_scan
 from app.orchestrator.task_cancellation import cancel_scan
-from app.reports import generate_markdown_report, get_markdown_report_path
+from app.reports import (
+    export_findings_csv,
+    export_findings_json,
+    generate_markdown_report,
+    get_markdown_report_path,
+)
 from app.schemas.scan import (
     ScanCreateRequest,
     ScanCreateResponse,
@@ -269,4 +274,44 @@ def get_scan_report_api(
     return {
         "report_path": str(report_path),
         "content": report_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.post("/{scan_id}/export/csv")
+def export_scan_findings_csv_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        export_path = export_findings_csv(scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Scan not found") from exc
+
+    return {
+        "export_path": str(export_path),
+        "content": export_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.post("/{scan_id}/export/json")
+def export_scan_findings_json_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        export_path = export_findings_json(scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Scan not found") from exc
+
+    return {
+        "export_path": str(export_path),
+        "content": export_path.read_text(encoding="utf-8"),
     }

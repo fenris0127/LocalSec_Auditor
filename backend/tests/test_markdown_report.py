@@ -1,3 +1,6 @@
+import csv
+import json
+from io import StringIO
 from datetime import datetime
 from uuid import uuid4
 
@@ -520,3 +523,69 @@ def test_generate_pdf_report_raises_clear_error_when_conversion_fails(monkeypatc
 
     with pytest.raises(generator.ReportExportError, match="PDF export failed"):
         generator.generate_pdf_report(scan_id)
+
+
+def test_export_findings_csv_and_json_masks_secrets(monkeypatch):
+    scan_id = f"findings_export_test_{uuid4().hex}"
+    secret_value = "sk_test_findings_export_secret_value"
+    session_local = make_session_local()
+    files: dict[str, str] = {}
+    monkeypatch.setattr(generator, "SessionLocal", session_local)
+    monkeypatch.setattr(
+        generator,
+        "create_scan_dirs",
+        lambda scan_id: {
+            "raw": MemoryPath(f"data/scans/{scan_id}/raw", files),
+            "normalized": MemoryPath(f"data/scans/{scan_id}/normalized", files),
+            "reports": MemoryPath(f"data/scans/{scan_id}/reports", files),
+        },
+    )
+
+    db = session_local()
+    try:
+        create_scan(
+            db,
+            scan_id=scan_id,
+            project_name="demo",
+            target_path="C:/AI/projects/demo",
+            status="completed",
+            created_at=datetime(2026, 4, 30, 10, 0, 0),
+        )
+        create_finding(
+            db,
+            finding_id="finding_export_secret",
+            scan_id=scan_id,
+            category="secret",
+            scanner="gitleaks",
+            severity="high",
+            title=f"Secret detected: {secret_value}",
+            status="open",
+            file_path=".env",
+            line=1,
+            raw_json_path=f"data/scans/{scan_id}/raw/gitleaks.json",
+            llm_summary=f"Rotate leaked token {secret_value}.",
+        )
+    finally:
+        db.close()
+
+    csv_path = generator.export_findings_csv(scan_id)
+    json_path = generator.export_findings_json(scan_id)
+    csv_content = csv_path.read_text(encoding="utf-8")
+    json_content = json_path.read_text(encoding="utf-8")
+    csv_rows = list(csv.DictReader(StringIO(csv_content)))
+    json_rows = json.loads(json_content)
+
+    assert str(csv_path) == f"data/scans/{scan_id}/reports/findings.csv"
+    assert str(json_path) == f"data/scans/{scan_id}/reports/findings.json"
+    assert csv_path.is_file()
+    assert json_path.is_file()
+    assert secret_value not in csv_content
+    assert secret_value not in json_content
+    assert "[REDACTED_SECRET]" in csv_content
+    assert "[REDACTED_SECRET]" in json_content
+    assert csv_rows[0]["id"] == "finding_export_secret"
+    assert csv_rows[0]["line"] == "1"
+    assert csv_rows[0]["title"] == "Secret detected: [REDACTED_SECRET]"
+    assert json_rows[0]["id"] == "finding_export_secret"
+    assert json_rows[0]["line"] == 1
+    assert json_rows[0]["title"] == "Secret detected: [REDACTED_SECRET]"
