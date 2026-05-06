@@ -91,6 +91,30 @@ Install only the scanners you intend to use:
 Lynis and OpenSCAP checks are read-only and are best suited to Linux or WSL
 targets. LocalSec Auditor does not perform automatic remediation.
 
+## PDF Export Requirements
+
+Markdown and HTML reports are the default report formats and work without a PDF
+backend. CSV and JSON findings export also work without a PDF backend.
+
+PDF export is optional. The current PDF implementation converts the generated
+HTML report to PDF with WeasyPrint when it is installed:
+
+```bash
+cd backend
+pip install weasyprint
+```
+
+WeasyPrint may require additional native libraries, especially on Windows. If
+PDF export is needed on Windows, check the WeasyPrint installation notes for the
+required platform packages before relying on PDF generation.
+
+If WeasyPrint or another compatible HTML-to-PDF backend is not available, the
+PDF API does not crash the server. It returns a clear error such as:
+
+```text
+PDF export requires an HTML-to-PDF backend. Install WeasyPrint to enable PDF reports.
+```
+
 ## Backend
 
 Install dependencies:
