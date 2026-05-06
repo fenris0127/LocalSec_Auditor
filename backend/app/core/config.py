@@ -15,6 +15,8 @@ DEFAULT_WORKSPACE_ROOT = Path("C:/AI/projects")
 WORKSPACE_ROOT_ENV = "LOCALSC_WORKSPACE"
 OFFLINE_MODE_ENV = "LOCALSC_OFFLINE_MODE"
 DEFAULT_OFFLINE_MODE = True
+SEMGREP_RULES_PATH_ENV = "LOCALSC_SEMGREP_RULES_PATH"
+DEFAULT_SEMGREP_RULES_PATH = PROJECT_ROOT / "rules" / "semgrep"
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,7 @@ class Settings:
     database_path: Path
     workspace_root: Path = DEFAULT_WORKSPACE_ROOT
     offline_mode: bool = DEFAULT_OFFLINE_MODE
+    semgrep_rules_path: Path = DEFAULT_SEMGREP_RULES_PATH
 
     @property
     def database_url(self) -> str:
@@ -56,7 +59,15 @@ def get_settings() -> Settings:
     db_path = Path(os.getenv(DB_PATH_ENV, str(DEFAULT_DB_PATH))).expanduser()
     workspace_root = Path(os.getenv(WORKSPACE_ROOT_ENV, str(DEFAULT_WORKSPACE_ROOT))).expanduser()
     offline_mode = _env_bool(OFFLINE_MODE_ENV, DEFAULT_OFFLINE_MODE)
-    return Settings(database_path=db_path, workspace_root=workspace_root, offline_mode=offline_mode)
+    semgrep_rules_path = Path(
+        os.getenv(SEMGREP_RULES_PATH_ENV, str(DEFAULT_SEMGREP_RULES_PATH))
+    ).expanduser()
+    return Settings(
+        database_path=db_path,
+        workspace_root=workspace_root,
+        offline_mode=offline_mode,
+        semgrep_rules_path=semgrep_rules_path,
+    )
 
 
 def get_ollama_settings() -> OllamaSettings:
