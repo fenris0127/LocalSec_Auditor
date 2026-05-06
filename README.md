@@ -69,6 +69,9 @@ Offline mode requirements:
   retrieval can return references.
 - Update APIs are blocked while `LOCALSC_OFFLINE_MODE=true`.
 
+Use the [offline setup checklist](docs/technical/offline-setup-checklist.md)
+before moving a machine into an internet-restricted environment.
+
 Update mode:
 
 - Set `LOCALSC_OFFLINE_MODE=false` to allow explicit update actions.
