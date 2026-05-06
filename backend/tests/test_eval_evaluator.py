@@ -107,6 +107,50 @@ def test_response_fails_when_it_invents_cve():
     assert "contains CVE not present in input_finding: ['CVE-2099-9999']" in result.failures
 
 
+def test_response_passes_when_action_references_input_component():
+    case = make_case(
+        input_finding={
+            "category": "cve",
+            "scanner": "trivy",
+            "title": "Vulnerable OpenSSL package",
+            "component": "openssl",
+            "cve": "CVE-2024-5535",
+        },
+    )
+    response = GOOD_RESPONSE.replace(
+        "Update or rebuild the affected package from a trusted source.",
+        "Update openssl from a trusted source.",
+    )
+
+    result = evaluate_llm_response(case, response)
+
+    assert result.passed is True
+
+
+def test_response_fails_when_action_references_package_not_in_input():
+    case = make_case(
+        input_finding={
+            "category": "cve",
+            "scanner": "trivy",
+            "title": "Vulnerable OpenSSL package",
+            "component": "openssl",
+            "cve": "CVE-2024-5535",
+        },
+    )
+    response = GOOD_RESPONSE.replace(
+        "Update or rebuild the affected package from a trusted source.",
+        "Update lodash from a trusted source.",
+    )
+
+    result = evaluate_llm_response(case, response)
+
+    assert result.passed is False
+    assert (
+        "contains component/package not present in input_finding action: ['lodash']"
+        in result.failures
+    )
+
+
 def test_false_positive_response_fails_when_certainty_is_used():
     fp_case = make_case(
         category="false_positive",

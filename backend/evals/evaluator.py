@@ -29,6 +29,27 @@ CERTAIN_FALSE_POSITIVE_PATTERNS = [
     re.compile(r"오탐(?:입니다|이다|으로 확정)"),
 ]
 PLACEHOLDER_VALUES = {"[REDACTED_SECRET]", "<REDACTED>", "***", "N/A"}
+COMPONENT_FIELD_NAMES = {
+    "component",
+    "package",
+    "package_name",
+    "packageName",
+    "dependency",
+    "library",
+    "artifact",
+    "image",
+}
+ACTION_PACKAGE_PATTERN = re.compile(
+    r"\b(?:update|upgrade|rebuild|patch|pin|install)\s+"
+    r"(?:the\s+)?"
+    r"(?!(?:or|the|an?|affected|vulnerable|package|dependency|component|scanner|same)\b)"
+    r"([@A-Za-z0-9][@A-Za-z0-9_.:/+-]{1,80})",
+    re.IGNORECASE,
+)
+SECTION_HEADING_PATTERN = re.compile(
+    r"^\s*(?:\d+\.\s*)?(요약|위험한 이유|조치 방법|검증 방법|오탐 가능성|summary|risk|impact|remediation|fix|verification|verify|false[- ]?positive)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -58,11 +79,42 @@ def _iter_values(value: Any) -> list[str]:
     return []
 
 
+def _normalize_component_name(value: str) -> str:
+    return value.strip().strip(".,;:()[]{}<>`'\"").lower()
+
+
+def _iter_named_values(value: Any) -> list[tuple[str, str]]:
+    if isinstance(value, dict):
+        items: list[tuple[str, str]] = []
+        for key, item in value.items():
+            if isinstance(item, str):
+                items.append((str(key), item))
+            else:
+                items.extend(_iter_named_values(item))
+        return items
+    if isinstance(value, list):
+        items = []
+        for item in value:
+            items.extend(_iter_named_values(item))
+        return items
+    return []
+
+
 def _input_cves(eval_case: EvalCase) -> set[str]:
     cves: set[str] = set()
     for value in _iter_values(eval_case.input_finding):
         cves.update(match.upper() for match in CVE_PATTERN.findall(value))
     return cves
+
+
+def _input_components(eval_case: EvalCase) -> set[str]:
+    components: set[str] = set()
+    for key, value in _iter_named_values(eval_case.input_finding):
+        if key in COMPONENT_FIELD_NAMES:
+            component = _normalize_component_name(value)
+            if component and component not in {"none", "n/a", "unknown"}:
+                components.add(component)
+    return components
 
 
 def _input_secret_values(eval_case: EvalCase) -> set[str]:
@@ -82,6 +134,31 @@ def _has_raw_secret(response: str, eval_case: EvalCase) -> bool:
 
     redacted_response = response.replace("[REDACTED_SECRET]", "")
     return any(pattern.search(redacted_response) for pattern in SECRET_PATTERNS)
+
+
+def _section_text(response: str, section_aliases: list[str]) -> str:
+    lines = response.splitlines()
+    selected: list[str] = []
+    in_section = False
+    for line in lines:
+        if SECTION_HEADING_PATTERN.search(line):
+            if in_section:
+                break
+            in_section = _contains_any(line, section_aliases)
+            continue
+        if in_section:
+            selected.append(line)
+    return "\n".join(selected).strip()
+
+
+def _action_components(response: str) -> set[str]:
+    remediation_text = _section_text(response, REQUIRED_SECTION_GROUPS["remediation"])
+    if not remediation_text:
+        remediation_text = response
+    return {
+        _normalize_component_name(match.group(1))
+        for match in ACTION_PACKAGE_PATTERN.finditer(remediation_text)
+    }
 
 
 def evaluate_llm_response(eval_case: EvalCase, response: str) -> EvaluationResult:
@@ -106,6 +183,13 @@ def evaluate_llm_response(eval_case: EvalCase, response: str) -> EvaluationResul
     invented_cves = sorted(response_cves - allowed_cves)
     if invented_cves:
         failures.append(f"contains CVE not present in input_finding: {invented_cves}")
+
+    allowed_components = _input_components(eval_case)
+    invented_components = sorted(_action_components(response) - allowed_components)
+    if invented_components:
+        failures.append(
+            f"contains component/package not present in input_finding action: {invented_components}"
+        )
 
     if not _contains_any(response, REQUIRED_SECTION_GROUPS["verification"]):
         failures.append("missing verification method")
