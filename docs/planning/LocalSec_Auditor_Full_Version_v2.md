@@ -1,5 +1,8 @@
 # LocalSec Auditor 풀버전 계획서
 
+> 이 문서는 LocalSec Auditor의 장기 풀버전 로드맵이다. v1.0 릴리즈 후보에 포함되는 실제 구현 범위는
+> [docs/product/v1.0-scope.md](../product/v1.0-scope.md)를 기준으로 한다.
+
 ## 1. 프로젝트 정의
 
 **LocalSec Auditor**는 로컬 LLM과 오픈소스 보안 스캐너를 결합한 통합 보안 진단 플랫폼이다. CVE 취약점 점검, CCE 보안 설정 점검, 소스코드 보안 약점 진단, Secret 탐지, 컨테이너/IaC 점검, 한국어 리포트 생성을 하나의 Web UI에서 제공한다.
