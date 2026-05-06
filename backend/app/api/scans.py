@@ -11,9 +11,12 @@ from app.db.database import get_db_session
 from app.orchestrator.hermes import rerun_scan_task, run_scan
 from app.orchestrator.task_cancellation import cancel_scan
 from app.reports import (
+    ReportExportError,
     export_findings_csv,
     export_findings_json,
+    generate_html_report,
     generate_markdown_report,
+    generate_pdf_report,
     get_markdown_report_path,
 )
 from app.schemas.scan import (
@@ -274,6 +277,47 @@ def get_scan_report_api(
     return {
         "report_path": str(report_path),
         "content": report_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.post("/{scan_id}/report/html")
+def create_scan_html_report_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        report_path = generate_html_report(scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Scan not found") from exc
+
+    return {
+        "report_path": str(report_path),
+        "content": report_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.post("/{scan_id}/report/pdf")
+def create_scan_pdf_report_api(
+    scan_id: str,
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    scan = get_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    try:
+        report_path = generate_pdf_report(scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Scan not found") from exc
+    except ReportExportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "report_path": str(report_path),
     }
 
 

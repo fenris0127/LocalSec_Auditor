@@ -11,6 +11,7 @@ from app.crud.scan import create_scan
 from app.db.base import Base
 from app.db.database import get_db_session
 from app.main import app
+from app.reports import ReportExportError
 
 
 class MemoryPath:
@@ -107,6 +108,8 @@ def test_report_apis_return_404_for_missing_scan():
     try:
         post_response = client.post("/api/scans/missing/report")
         get_response = client.get("/api/scans/missing/report")
+        html_response = client.post("/api/scans/missing/report/html")
+        pdf_response = client.post("/api/scans/missing/report/pdf")
         csv_response = client.post("/api/scans/missing/export/csv")
         json_response = client.post("/api/scans/missing/export/json")
 
@@ -114,6 +117,10 @@ def test_report_apis_return_404_for_missing_scan():
         assert post_response.json()["detail"] == "Scan not found"
         assert get_response.status_code == 404
         assert get_response.json()["detail"] == "Scan not found"
+        assert html_response.status_code == 404
+        assert html_response.json()["detail"] == "Scan not found"
+        assert pdf_response.status_code == 404
+        assert pdf_response.json()["detail"] == "Scan not found"
         assert csv_response.status_code == 404
         assert csv_response.json()["detail"] == "Scan not found"
         assert json_response.status_code == 404
@@ -133,6 +140,64 @@ def test_get_report_api_returns_404_when_report_is_missing():
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Report not found"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_html_report_api_returns_report_content():
+    client, session_local = make_client()
+    seed_scan(session_local)
+    files = {
+        "data/scans/scan_001/reports/report.html": "<!doctype html><html><body>Report</body></html>",
+    }
+    report_path = MemoryPath("data/scans/scan_001/reports/report.html", files)
+
+    try:
+        with patch("app.api.scans.generate_html_report", return_value=report_path) as generator_mock:
+            response = client.post("/api/scans/scan_001/report/html")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "report_path": "data/scans/scan_001/reports/report.html",
+            "content": "<!doctype html><html><body>Report</body></html>",
+        }
+        generator_mock.assert_called_once_with("scan_001")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_pdf_report_api_returns_report_path():
+    client, session_local = make_client()
+    seed_scan(session_local)
+    report_path = MemoryPath("data/scans/scan_001/reports/report.pdf", {})
+
+    try:
+        with patch("app.api.scans.generate_pdf_report", return_value=report_path) as generator_mock:
+            response = client.post("/api/scans/scan_001/report/pdf")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "report_path": "data/scans/scan_001/reports/report.pdf",
+        }
+        generator_mock.assert_called_once_with("scan_001")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_pdf_report_api_returns_clear_error_when_export_fails():
+    client, session_local = make_client()
+    seed_scan(session_local)
+
+    try:
+        with patch(
+            "app.api.scans.generate_pdf_report",
+            side_effect=ReportExportError("PDF export failed: converter unavailable"),
+        ) as generator_mock:
+            response = client.post("/api/scans/scan_001/report/pdf")
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "PDF export failed: converter unavailable"
+        generator_mock.assert_called_once_with("scan_001")
     finally:
         app.dependency_overrides.clear()
 
