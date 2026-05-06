@@ -21,6 +21,8 @@ TOOL_VERSION_COMMANDS = {
     "trivy": ["trivy", "--version"],
     "syft": ["syft", "version"],
     "grype": ["grype", "version"],
+    "lynis": ["lynis", "show", "version"],
+    "openscap": ["oscap", "--version"],
 }
 
 

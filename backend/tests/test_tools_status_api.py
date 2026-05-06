@@ -16,6 +16,12 @@ def test_check_tool_status_uses_expected_commands_without_shell():
         ("trivy", "--version"): CommandResult(stdout="Version: 0.50.0\nVulnerability DB: 1", stderr="", exit_code=0),
         ("syft", "version"): CommandResult(stdout="syft 1.0.0\n", stderr="", exit_code=0),
         ("grype", "version"): CommandResult(stdout="grype 2.0.0\n", stderr="", exit_code=0),
+        ("lynis", "show", "version"): CommandResult(stdout="3.1.1\n", stderr="", exit_code=0),
+        ("oscap", "--version"): CommandResult(
+            stdout="OpenSCAP command line tool (oscap) 1.3.9\n",
+            stderr="",
+            exit_code=0,
+        ),
     }
 
     def fake_run_command(command, timeout=None):
@@ -27,6 +33,8 @@ def test_check_tool_status_uses_expected_commands_without_shell():
         assert check_tool_status("trivy").version == "Version: 0.50.0"
         assert check_tool_status("syft").version == "syft 1.0.0"
         assert check_tool_status("grype").version == "grype 2.0.0"
+        assert check_tool_status("lynis").version == "3.1.1"
+        assert check_tool_status("openscap").version == "OpenSCAP command line tool (oscap) 1.3.9"
 
     assert [call.args[0] for call in run_command.call_args_list] == [
         ["semgrep", "--version"],
@@ -34,6 +42,8 @@ def test_check_tool_status_uses_expected_commands_without_shell():
         ["trivy", "--version"],
         ["syft", "version"],
         ["grype", "version"],
+        ["lynis", "show", "version"],
+        ["oscap", "--version"],
     ]
     assert all(call.kwargs["timeout"] == 5 for call in run_command.call_args_list)
     assert all("shell" not in call.kwargs for call in run_command.call_args_list)
@@ -58,6 +68,8 @@ def test_tools_status_api_returns_status_for_all_tools_without_server_error():
         "trivy": CommandResult(stdout="", stderr="trivy failed", exit_code=1),
         "syft": CommandResult(stdout="syft 1.0.0\n", stderr="", exit_code=0),
         "grype": CommandResult(stdout="", stderr="", exit_code=None, error_message="not found"),
+        "lynis": CommandResult(stdout="3.1.1\n", stderr="", exit_code=0),
+        "oscap": CommandResult(stdout="", stderr="", exit_code=None, error_message="not found"),
     }
 
     def fake_run_command(command, timeout=None):
@@ -75,4 +87,6 @@ def test_tools_status_api_returns_status_for_all_tools_without_server_error():
         "trivy": {"installed": False, "version": None, "error": "trivy failed"},
         "syft": {"installed": True, "version": "syft 1.0.0", "error": None},
         "grype": {"installed": False, "version": None, "error": "not found"},
+        "lynis": {"installed": True, "version": "3.1.1", "error": None},
+        "openscap": {"installed": False, "version": None, "error": "not found"},
     }
